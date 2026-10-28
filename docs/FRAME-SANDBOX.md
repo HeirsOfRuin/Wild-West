@@ -85,3 +85,12 @@ county election, the weather.
   seeds.
 - Win rates on every policy, against the first build.
 - Every new knob through the inert check.
+
+## Measured (as built)
+
+- Money now goes somewhere: the careful bot spends a median $11,000-14,000 per
+  career. Bots that never spend retire 2.5% of the time; bots that buy gear and
+  houses retire 6%; with the end-game purchases (next round), 20%.
+- Every new tuning knob changes games (inert check, 0 of 91 inert).
+- Found on the way: robbed vaults refilled at once; hideout heat went to an
+  undefined county; retyping a surname redrew the creation screen.

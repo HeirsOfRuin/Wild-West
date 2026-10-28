@@ -133,6 +133,34 @@ no longer sink without limit, while an idle gang still turns 53% of the time.
 Scouting: died on a job 28.7% vs 38.7% without (gap 10, floor 10.9), still just
 inside the noise.
 
+## The sandbox round (docs/FRAME-SANDBOX.md)
+
+You now make the outlaw and pick 3-4 companions. The gang grows from men who come
+looking. Money buys gear, safe houses, sheriffs, a doctor and a wedding, and the
+end game adds a farm, a business, a lawyer and money for old friends. The map uses
+the real county layout, and one line of state news runs each season. The author
+set a win target of 15-20%.
+
+Final measurements, 200 seeds per policy, same seeds (`node sim/run.js 200`):
+
+| Policy | Retired | Killed | Captured | Median years |
+|---|---|---|---|---|
+| careful (scouts, spends, buys the end game) | 20.0% | 32.0% | 30.0% | 7.0 |
+| noendgame (careful, no farm/business/lawyer/hush) | 6.0% | 31.0% | 36.5% | 6.9 |
+| plain (careful, never spends on anything) | 2.5% | 37.5% | 41.5% | 5.8 |
+| noscout (careful, never scouts) | 18.0% | 39.5% | 30.5% | 5.5 |
+| stayer (careful, never quits) | 0% | 51.5% | 46.0% | 7.0 |
+| raider | 0% | 57.0% | 43.0% | 2.0 |
+
+- Spending is what the money is for: plain 2.5%, gear and houses 6%, plus the
+  end game 20%.
+- Scouting no longer moves the win rate much (20% vs 18%), but it keeps you alive
+  on jobs (killed 32% vs 39.5%).
+- Inert check (`node sim/inert.js`): 0 of 91 knob settings inert. Hothead and
+  ambitious changed none of the 12 whole games sampled (a hothead rarely goes
+  inside; the Fords arrive late), so `test/traits.test.js` proves every trait with
+  a scene.
+
 ## What the kill gate found and fixed (in order)
 
 1. A careful bot retired after one $12,000 job in 1866 (85% "wins", 3.3 years).
@@ -154,6 +182,8 @@ inside the noise.
 
 | Date | Decision |
 |---|---|
+| 2026-10-28 | **Win target 15-20%; realistic end-game purchases.** The author: "I'd like a win rate around 15-20%" and "bigger purchases that help the retirement end game, but keep it realistic". Farm, business, lawyer, hush money; quiet years 8 -> 10. Measured 20.0% (200 seeds, SE 2.8); first cut was 30.7%. |
+| 2026-10-28 | **Sandbox.** The author: "more sandbox, where you make your character, start with 2 or 3 other family members or friends, then build up your gang and upgrade". Built as framed; the 1874 retirement lock became marriage. Careful retirement fell to 9-11% before the end-game round. |
 | 2026-10-28 | **First playable built from the concept.** The author's brief: "Fights are rare, fast and deadly. Planning matters more than shooting." and "'Win': retire quietly ... This is rare and hard." Built to it; reference bot retires 22% (100 seeds), raiders never. The target win rate is the author's call (other games: 5-7% crowned, 25% centennial). |
 | 2026-10-28 | **Retirement opens in 1874** (marriage to Zee). Kill gate: without it the first job in 1866 was enough. Alternative if the author dislikes a date lock: make the quiet years scale with reward as well as legend. |
 | 2026-10-28 | **Player is Jesse James**, with the real gang and family. The concept says "modelled on"; a fictional leader is a small change (names in `gang.data.js`, text in `season.js` and `pressure.js`). |
