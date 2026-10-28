@@ -117,6 +117,22 @@ is the gap two rates need before it is a result (2 SE).
 Causes of death for the careful bot (150 seeds, before the last tuning pass):
 on a job 12%, informer 13%, turncoat raid 7%, recognised under cover 5%.
 
+After the loyalty-drift change (last change this session), `node sim/run.js 150`:
+
+| Policy | Retired | Killed | Captured | Era ended | Median years | Median jobs |
+|---|---|---|---|---|---|---|
+| careful | 22.7% | 23.3% | 38.0% | 16.0% | 7.5 | 16 |
+| noscout | 17.3% | 26.0% | 44.0% | 12.7% | 5.5 | 15 |
+| stayer | 0% | 40.0% | 54.7% | 3.3% | 7.4 | 19 |
+| raider | 0% | 55.3% | 43.3% | 1.3% | 1.5 | 6 |
+| hermit (never rides) | 0% | 18.0% | 43.3% | 38.7% | 7.6 | 0 |
+
+Balance impact of the drift: careful retirement unchanged (22% -> 22.7%, inside
+1 SE of 3.4); careful deaths by turncoat fell (7% -> 1.3%) because left-out men
+no longer sink without limit, while an idle gang still turns 53% of the time.
+Scouting: died on a job 28.7% vs 38.7% without (gap 10, floor 10.9), still just
+inside the noise.
+
 ## What the kill gate found and fixed (in order)
 
 1. A careful bot retired after one $12,000 job in 1866 (85% "wins", 3.3 years).
