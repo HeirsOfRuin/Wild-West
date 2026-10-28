@@ -1,7 +1,7 @@
 // The turn. One call per player action: act(state, action) -> new state.
 //
-// Free actions (scout, recruit, dismiss, kill, pay, letter) change the state and
-// leave the season open. Season actions (job, lie low, cover, retire, wait) run
+// Free actions (scout, recruit, dismiss, kill, pay, letter, buy, house, bribe,
+// doctor, marry) change the state and leave the season open. Season actions (job, lie low, cover, retire, wait) run
 // the season's end in this fixed order:
 //   1. the action itself (a job resolves here)
 //   2. your living costs
@@ -10,18 +10,22 @@
 //   5. the pursuers               pressure.seasonPressure
 //   6. the counties settle        sympathy drifts to its baseline
 //   7. the legend fades
-//   8. history happens            events by date
-//   9. the clock moves; a new year re-rolls the targets
+//   8. the clock moves; a new year re-rolls the targets
+//   9. history and the state news; children; new men come looking
 // One record comes out: s.report, which the season screen shows.
 
 import { COUNTIES, TARGETS, NORTHFIELD } from '../data/world.data.js';
 import { CONFIG } from '../data/config.data.js';
-import { K, yearOf, seasonOf, dateOf, lastTurn, rollTarget } from './state.js';
+import { K, yearOf, seasonOf, dateOf, lastTurn, rollTarget, cashOf } from './state.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
 import { runJob, targetDef, targetOpen } from './job.js';
-import { active, followers, member, recruit, dismiss, killMember, bonus, seasonLoyalty, seasonBetrayal, defOf } from './gang.js';
-import { seasonPressure, COVER_COUNTY, COVER_NAME, familyMemberPresent } from './pressure.js';
+import { active, followers, member, recruit, dismiss, killMember, bonus, seasonLoyalty, seasonBetrayal, nudge } from './gang.js';
+const nudgeKeep = (s, id) => nudge(s, id, -4);
+import { seasonPressure, COVER_COUNTY, COVER_NAME } from './pressure.js';
+import { buyGear, buyHouse, bribe, doctor, marry, loseHouse } from './outfit.js';
+import { recruitOffers, childName } from './people.js';
+import { STATE_NEWS, STATE_FILLER } from '../data/news.data.js';
 import { retireProblem, finalScore, retireNeeded } from './ending.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -36,6 +40,11 @@ export function act(s0, a) {
     case 'kill': killMember(s, a.id); return s;
     case 'bonus': bonus(s, a.id, a.amount); return s;
     case 'letter': letter(s); return s;
+    case 'buy': buyGear(s, a.id, a.item); return s;
+    case 'house': buyHouse(s, a.county); return s;
+    case 'bribe': bribe(s, a.county); return s;
+    case 'doctor': doctor(s, a.id); return s;
+    case 'marry': marry(s); return s;
     case 'job': case 'lielow': case 'cover': case 'retire': case 'wait': case 'rideagain':
       return seasonAction(s, a);
     default: throw new Error(`Unknown action: ${a.type}`);
@@ -66,7 +75,7 @@ function scout(s, id) {
   } else {
     const tg = s.targets[id];
     s.intel[id] = { t: s.t, guard: Math.max(0, Math.min(3, def.guard + tg.boostG + tg.rollG)),
-      fight: Math.max(0, Math.min(3, def.fight + tg.boostF + tg.rollF)), cash: tg.cash };
+      fight: Math.max(0, Math.min(3, def.fight + tg.boostF + tg.rollF)), cash: cashOf(s, def, tg.cash) };
     s.heat[def.county] = Math.min(100, s.heat[def.county] + K(s, 'scoutHeat'));
   }
 }
@@ -99,11 +108,14 @@ function letter(s) {
 // ---- season actions -----------------------------------------------------------
 
 export function lieLowOptions(s) {
-  const out = [{ id: 'farm', name: 'The family farm', county: 'clay',
-    lock: null, note: s.pinkActive ? 'Home. Watched by the Pinkertons.' : 'Home.' }];
+  const out = [{ id: 'farm', name: 'The family farm', county: s.home, house: 0,
+    lock: null, note: s.pinkActive ? 'Home. Watched by the Pinkertons.' : 'Home. Free.' }];
   for (const c of COUNTIES) {
-    out.push({ id: c.id, name: `${c.name} County`, county: c.id,
-      lock: s.sym[c.id] < K(s, 'safeSym') ? `Nobody in ${c.name} will hide you (sympathy under ${K(s, 'safeSym')}).` : null });
+    const house = s.houses[c.id] || 0;
+    const need = house ? K(s, 'houseSym') : K(s, 'safeSym');
+    out.push({ id: c.id, name: house ? `Your ${house === 2 ? 'hidden room' : 'safe house'} in ${c.name}` : `Friends in ${c.name}`, county: c.id, house,
+      note: house ? 'Yours. No fee.' : `$${K(s, 'safeHouseFee')} to the family.`,
+      lock: s.sym[c.id] < need ? `Nobody in ${c.name} will hide you (sympathy under ${need}).` : null });
   }
   return out;
 }
@@ -143,7 +155,7 @@ function seasonAction(s, a) {
       if (opt.lock) throw new Error(opt.lock);
       ctx.where = a.at;
       ctx.lieLow = true;
-      if (a.at !== 'farm') pay(s, -Math.min(s.purse, K(s, 'safeHouseFee')), `Safe house in ${opt.name}`);
+      if (a.at !== 'farm' && !opt.house) pay(s, -Math.min(s.purse, K(s, 'safeHouseFee')), `Hiding with friends in ${COUNTIES.find((c) => c.id === a.at).name}`);
       const give = Math.max(0, Math.min(a.give || 0, s.purse));
       if (give > 0) {
         pay(s, -give, `Given away in ${opt.name}: a widow's mortgage, a church roof`);
@@ -213,6 +225,24 @@ function seasonAction(s, a) {
     else { if (s.purse > 0) pay(s, -s.purse, 'Food, powder and horseshoes'); events.push({ kind: 'bad', text: 'A lean season. You owe money to people who hide you.' }); }
   }
 
+  // Every man you keep costs feed, powder and a place to sleep.
+  const men = followers(s).length;
+  if (men && !s.retired) {
+    const keep = men * K(s, 'keepPerMan');
+    if (s.purse >= keep) pay(s, -keep, `Keep for ${men} men`);
+    else {
+      if (s.purse > 0) pay(s, -s.purse, `Keep for ${men} men, part of it`);
+      for (const m of followers(s)) nudgeKeep(s, m.id);
+      events.push({ kind: 'bad', text: 'You could not pay for the men\'s keep this season. They noticed.' });
+    }
+  }
+
+  // The families who keep your houses want paying.
+  for (const c of Object.keys(s.houses)) {
+    if (s.purse >= K(s, 'houseUpkeep')) pay(s, -K(s, 'houseUpkeep'), `Keeping the house in ${COUNTIES.find((x) => x.id === c).name}`);
+    else loseHouse(s, c, events);
+  }
+
   // 3-5.
   if (!s.outcome) seasonLoyalty(s, { ...ctx, underCover: !!ctx.coverPlace }, rng, events);
   if (!s.outcome) seasonBetrayal(s, ctx, rng, events);
@@ -228,7 +258,7 @@ function seasonAction(s, a) {
   s.legend = clamp(Math.max(s.legend - K(s, 'legendDecay'), Math.min(s.legend, s.legendPeak * K(s, 'legendFloor'))), 0, 100);
 
   // The record of the season.
-  s.report = { t: s.t, title, job, events };
+  s.report = { t: s.t, title, job, events, state: s.stateLine?.t === s.t ? s.stateLine : null };
   for (const e of events) s.log.push({ t: s.t, kind: e.kind, text: e.text });
   if (job) s.log.push({ t: s.t, kind: 'job', text: job.headline });
   s.hist.push(snapshot(s));
@@ -252,7 +282,11 @@ function seasonAction(s, a) {
   s.t += 1;
   s.scouts = 0;
   if (seasonOf(s.t) === 0) newYear(s);
-  history(s, streamFor(s.seed, s.t, 'history'));
+  const hr = streamFor(s.seed, s.t, 'history');
+  history(s, hr);
+  stateNews(s, hr);
+  family(s, hr);
+  newMen(s, streamFor(s.seed, s.t, 'recruits'));
   return s;
 }
 
@@ -273,8 +307,7 @@ function retirementRisk(s, rng, events) {
   // Old friends who know the alias, now poor, now tempted.
   let p = 0;
   for (const g of s.gang) {
-    const d = defOf(g.id);
-    if (d.leader || d.kin === 'james') continue;
+    if (g.leader || g.kin === 'family') continue;
     if ((g.status === 'gone' || g.status === 'turned') && g.loyalty < 40) p += 0.03 * (s.reward / K(s, 'rewardScale') + 0.3);
   }
   if (rng.chance(Math.min(0.5, p))) {
@@ -310,9 +343,6 @@ function history(s, rng) {
     if (!s.pinkActive) { s.pinkActive = true; s.pinkerton = Math.max(s.pinkerton, 15); }
     news('The Adams Express Company has hired the Pinkerton National Detective Agency of Chicago to hunt you. They do not give up, they do not mind whom they hurt, and they pay informers.', 'The Pinkertons');
   }
-  if (y === 1874 && q === 1) news('You marry Zee Mimms, your cousin, after nine years of courting. Frank says you are a fool. He is at the wedding.', 'A wedding');
-  if (y === 1875 && q === 1) news('Zee has a son. You name him Jesse Edward.', 'A son');
-  if (y === 1879 && q === 1) news('Zee has a daughter, Mary.', 'A daughter');
   if (y === 1876 && q === 2 && !s.flags.northfieldDone) {
     const ch = member(s, 'chadwell');
     if (ch && ch.status === 'active') {
@@ -324,8 +354,52 @@ function history(s, rng) {
   if (y === 1879 && q === 0) news('New men are drifting into the old haunts, looking for you. Most of them never rode with Quantrill. Some of them are very young.', 'New faces');
   if (y === 1881 && q === 1) {
     s.reward = Math.max(s.reward + 5000, 10000);
-    news('Governor Thomas Crittenden, with railroad money behind him, offers $5,000 for your arrest and $5,000 more when you are convicted. Frank is worth the same. Every poor man in Missouri can do that sum.', 'Governor Crittenden');
+    news('Governor Thomas Crittenden, with railroad money behind him, offers $5,000 for your arrest and $5,000 more when you are convicted. Half that for any man who rides with you. Every poor man in Missouri can do that sum.', 'Governor Crittenden');
   }
+}
+
+// ---- the state, the family, new faces -------------------------------------------
+
+/** At most one item a season about Missouri. Dated items first; filler sometimes. */
+function stateNews(s, rng) {
+  const y = yearOf(s.t), q = seasonOf(s.t);
+  const item = STATE_NEWS.find((n) => n.y === y && n.q === q);
+  let text = null;
+  if (item) {
+    text = item.text;
+    const e = item.effect;
+    if (e?.bankCash) s.mods.bankCash = { x: e.bankCash, until: e.until };
+    if (e?.symTrainX) s.mods.symTrainX = { x: e.symTrainX, until: e.until };
+    if (e?.strike) s.mods.strike = { x: e.strike, until: e.until };
+    if (e?.amnesty && s.legend >= e.legendAtLeast) for (const c of COUNTIES) s.sym[c.id] = clamp(s.sym[c.id] + e.amnesty, 0, 100);
+  } else if (rng.chance(0.33)) {
+    text = rng.pick(STATE_FILLER)(y);
+  }
+  s.stateLine = text ? { t: s.t, text } : null;
+  if (text) s.log.push({ t: s.t, kind: 'state', title: 'The State', text });
+}
+
+function family(s, rng) {
+  if (!s.married || seasonOf(s.t) !== 0) return;
+  const kids = s.family.filter((f) => f.rel === 'son' || f.rel === 'daughter').length;
+  if (kids >= 3 || !rng.chance(K(s, 'childChance'))) return;
+  const c = childName(s.seed, kids + 1, s.me.last);
+  const wife = s.family.find((f) => f.id === 'wife');
+  if (!wife?.alive) return;
+  s.family.push({ id: `child${kids + 1}`, name: c.name, rel: c.rel, alive: true, injured: false, core: true });
+  s.log.push({ t: s.t, kind: 'story', title: 'Family', text: `${wife.name.split(' ')[0]} has a ${c.rel === 'son' ? 'son' : 'daughter'}. You name ${c.rel === 'son' ? 'him' : 'her'} ${c.name.split(' ')[0]}.` });
+}
+
+/** Men come looking for you: more, and better, the bigger your name. */
+function newMen(s, rng) {
+  s.offers = s.offers.filter((o) => o.expires >= s.t);
+  if (s.retired || active(s).length >= 8) return;
+  const want = s.legend < 15 ? (rng.chance(0.4) ? 1 : 0) : s.legend < 40 ? 1 : K(s, 'recruitOffers');
+  const room = Math.max(0, 3 - s.offers.length);
+  const n = Math.min(want, room);
+  if (!n) return;
+  const made = recruitOffers(s, rng, n, yearOf(s.t), s.legend, () => s.nextId++);
+  for (const o of made) s.offers.push({ ...o, expires: s.t + K(s, 'offerLife') - 1 });
 }
 
 export { dateOf };

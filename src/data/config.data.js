@@ -10,6 +10,7 @@ export const CONFIG = {
   // money (1866-82 dollars)
   livingCost: 40, // each member, each season, out of his own pocket
   leaderLiving: 100, // yours, out of the purse: horses, powder, the family, small bribes
+  keepPerMan: 30, // feed, powder and hideouts for each man who rides with you, out of the purse
   safeHouseFee: 50, // paid to the family that hides you
   scoutCost: 40,
   scoutHeat: 8, // a stranger asking questions is remembered
@@ -20,7 +21,6 @@ export const CONFIG = {
   recruitCost: 100,
   retireCost: 200, // per season while retired
   retireNeedPurse: 5000,
-  retireFrom: 1874, // you marry Zee: until then there is nobody to quit for
   stake: 300, // what a man expects to go home on
   retireNeedCover: 60,
   retireSeasons: 8, // quiet seasons before the world forgets you...
@@ -28,6 +28,22 @@ export const CONFIG = {
 
   // safe houses
   safeSym: 35, // a county hides you only at or above this sympathy
+  houseSym: 15, // ...or at or above this one where you own a safe house
+  houseUpkeep: 20, // per safe house per season, to the family that keeps it
+  houseInform: [1, 0.5, 0.25], // informer risk multiplier by safe-house level
+  houseCatch: 0.08, // fresh horses at a level-2 house: less chance the posse catches you
+  minHouseSym: 20, // nobody will sell or keep a house for you below this
+
+  // the outfit and the rise
+  gearStep: 0.5, // skill per gear tier
+  skillMax: 4,
+  learnChance: 0.15, // a man unhurt on a job may get better at the work he did
+  bribePerHeat: 8, // dollars per point of heat to pay off a sheriff (Union counties double)
+  doctorCost: 100,
+  marryCost: 300,
+  childChance: 0.3, // each spring after marrying, up to three children
+  recruitOffers: 2, // most new men looking for you in a season
+  offerLife: 2, // seasons an offer stands
 
   // loyalty
   kinFloor: 40,
@@ -82,7 +98,7 @@ export const CONFIG = {
   legendFloor: 0.4, // a legend never fades below this share of its peak
   legendSymSouth: 0.15, // baseline sympathy per point of legend, Southern counties
   legendSymNorth: 0.05,
-  letterLegend: 8,
+  letterLegend: 5,
   letterSym: 4,
   letterSymNorth: -3,
   letterReward: 500,

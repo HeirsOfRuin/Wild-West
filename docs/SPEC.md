@@ -5,9 +5,11 @@ Concept (one page)", October 2026). Where this page and the concept differ, the
 difference is called out and the reason given.
 
 ## Setting
-Western Missouri, spring 1866 to winter 1882. You are Jesse James at the head of
-the James-Younger gang: ex-bushwhackers who cannot go home to vote, preach or
-practise law after the war. It is a game because the gang lived on two things it
+Western Missouri, spring 1866 to winter 1882. You make an outlaw in the mould of
+the James-Younger gang: an ex-bushwhacker, a farmer's son, a cavalryman or a
+drifter who cannot go home to the life he had. (The first build cast you as Jesse
+James with the whole gang; the sandbox round, `docs/FRAME-SANDBOX.md`, replaced
+that with a character you make and a gang you build.) It is a game because the gang lived on two things it
 could not buy: the counties that hid it and the men who rode with it. Both wear
 out.
 
@@ -46,8 +48,7 @@ you ride, the plan is the decision: scouting changes what the right plan is.
   arc) shoots you himself.
 
 ## The one way to win
-Retire, from 1874 (when you marry Zee, there is somebody to quit for): the gang
-dissolved, a believed cover as Mr. Howard, $5,000 saved, the wife and children
+Retire, once married (there has to be somebody to quit for): the gang dissolved, a believed cover as Mr. Howard, $5,000 saved, the wife and children
 alive. Then survive the quiet years after: eight seasons plus one for every 10
 points of peak legend. Old gang members who left broke and bitter are the danger.
 
@@ -56,8 +57,9 @@ Years survived, money taken and kept, legend, townsfolk killed, and the men who
 died in your service, listed by name. Shown as parts, not summed.
 
 ## Scope (first playable, as the concept set it)
-One state (6 counties), 6 towns, 12 targets of 3 kinds, 7 starting men and 7
-recruits (14 named), the three pressure tracks, sympathy across 6 counties, the
+One state (6 counties), 6 towns, 12 targets of 3 kinds, 2-4 companions you
+choose, generated recruits plus 9 historical "known men", gear and safe houses,
+the three pressure tracks, sympathy across 6 counties, the
 Bob Ford betrayal arc plus the general turncoat mechanic, and Northfield as a
 one-time offer in 1876.
 
@@ -69,9 +71,9 @@ one-time offer in 1876.
 - **Northfield** is outside Missouri; kept as a one-season offer from Bill
   Chadwell, because the concept names it and it teaches the scouting lesson the
   hard way.
-- **Retirement opens in 1874**, not at any time. Without that, the first kill
-  gate showed a careful player retiring after one job in 1866 with no family to
-  retire to.
+- **Retirement needs a wife.** In the first build it opened in 1874, when Jesse
+  married Zee; without a lock, the first kill gate showed a careful player
+  retiring after one job in 1866. In the sandbox, marrying is your choice ($300).
 
 ## What carries over / what does not
 The engine shape (seasons, a job resolver, pressure tracks, sympathy map, hidden

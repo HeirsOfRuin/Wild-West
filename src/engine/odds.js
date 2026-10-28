@@ -95,17 +95,17 @@ export function posseStrength({ alarm, fight, guard, heat, kind, killed }) {
 }
 
 /** Chance the posse runs you down between the job and the hideout. */
-export function catchChance({ Q, symFrom, symTo, horseSkill, wounded, far }) {
+export function catchChance({ Q, symFrom, symTo, horseSkill, wounded, far, fresh = 0 }) {
   const sym = (symFrom + symTo) / 2;
   return clamp(
-    (Q / 100) * (1.2 - sym / 100) - 0.08 * (horseSkill - 2) + 0.06 * wounded + (far ? 0.25 : 0),
+    (Q / 100) * (1.2 - sym / 100) - 0.08 * (horseSkill - 2) + 0.06 * wounded + (far ? 0.25 : 0) - fresh,
     0.02, 0.85,
   );
 }
 
 /** Legend from a job: boldness, money, blood. Read by the resolver and the forecast. */
 export function legendGain({ approach, loot, killed, far }) {
-  return (approach === 'bold' ? 8 : 4) + loot / 1500 + (killed ? 3 : 0) + (far ? 10 : 0) - (loot === 0 ? 7 : 0);
+  return (approach === 'bold' ? 8 : 4) + loot / 2500 + (killed ? 3 : 0) + (far ? 10 : 0) - (loot === 0 ? 7 : 0);
 }
 
 /** Words for a probability, so the screen shows judgement, not arithmetic. */

@@ -6,16 +6,15 @@
 
 import { K, yearOf } from './state.js';
 import { followers } from './gang.js';
-import { familyMemberPresent } from './pressure.js';
 
 export function familyAlive(s) {
-  return s.family.filter((f) => ['zee', 'jessejr', 'mary'].includes(f.id) && familyMemberPresent(s, f.id)).every((f) => f.alive);
+  return s.family.filter((f) => f.core).every((f) => f.alive);
 }
 
 /** Why you cannot retire yet, or null. Each condition names its lever. */
 export function retireProblem(s) {
   if (s.retired) return 'You already have.';
-  if (yearOf(s.t) < K(s, 'retireFrom')) return `There is nobody to quit for yet. A man retires to a wife and a farm (you marry Zee in ${K(s, 'retireFrom')}).`;
+  if (!s.married) return 'There is nobody to quit for. A man retires to a wife and a farm (marry first: Gang screen, Family).';
   const n = followers(s).length;
   if (n) return `The gang has to be gone first: ${n} still ride with you (dismiss them from the Gang screen).`;
   if (!s.cover.place) return 'You need a respectable life to retire into: live as Mr. Howard first.';

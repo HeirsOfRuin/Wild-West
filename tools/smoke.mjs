@@ -57,7 +57,18 @@ check('title screen renders', await has('[data-act="new"]'));
 await look('title');
 
 await page.click('[data-act="new"]');
+check('New outlaw opens the creation screen', await has('#cr-first'));
+await page.click('[data-act="cr-start"]');
+check('Ride out with no name explains itself', await has('.toast'));
+await page.fill('#cr-first', 'Ike');
+await page.fill('#cr-last', 'Carver');
+await page.locator('#cr-last').blur();
+await page.click('[data-act="cr-bg"][data-v="farmer"]');
+await page.click('[data-act="cr-home"][data-v="ray"]');
+await look('create');
+await page.click('[data-act="cr-start"]');
 check('a new game opens on the season screen', await has('[data-screen="job"]'));
+check('the masthead names the outlaw', (await page.locator('.bar .who').innerText()).includes('Ike Carver'));
 await look('season');
 
 // Scout and rob the first open target with the default plan.
@@ -77,6 +88,20 @@ await page.click('[data-act="done"]');
 for (const tab of ['gang', 'map', 'news']) {
   await page.click(`[data-tab="${tab}"]`);
   await look(tab);
+  if (tab === 'gang') {
+    const buy = page.locator('[data-act="buy"]:not([disabled])').first();
+    if (await buy.count()) {
+      const p0 = await page.evaluate(() => globalThis.__outlaw.state.purse);
+      await buy.click();
+      const p1 = await page.evaluate(() => globalThis.__outlaw.state.purse);
+      check('buying gear takes money from the purse', p1 < p0, `${p0} -> ${p1}`);
+    }
+  }
+  if (tab === 'map') {
+    await page.locator('[data-act="county"][data-id="daviess"]').click();
+    check('tapping a county opens its panel', (await page.locator('.card h3').first().innerText()).includes('Daviess'));
+    await look('map-daviess');
+  }
 }
 await page.click('[data-tab="season"]');
 await page.click('[data-act="help"]');

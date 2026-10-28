@@ -9,8 +9,8 @@ import { seRate } from '../sim/stats.js';
 
 test('forecast alarm and take match resolved jobs (scouted, 600 jobs)', () => {
   const plans = [
-    { target: 'richmond-bank', approach: 'quiet', crew: [{ id: 'jesse', role: 'street' }, { id: 'frank', role: 'inside' }, { id: 'bob', role: 'horses' }] },
-    { target: 'gallatin-bank', approach: 'quiet', crew: [{ id: 'jesse', role: 'horses' }, { id: 'cole', role: 'inside' }, { id: 'jim', role: 'inside' }, { id: 'clell', role: 'street' }, { id: 'bob', role: 'street' }] },
+    { target: 'richmond-bank', approach: 'quiet', crew: [{ id: 'me', role: 'street' }, { id: 'c-brother', role: 'inside' }, { id: 'c-cousin', role: 'horses' }] },
+    { target: 'gallatin-bank', approach: 'quiet', crew: [{ id: 'me', role: 'horses' }, { id: 'c-brother', role: 'inside' }, { id: 'c-cousin', role: 'inside' }, { id: 'c-warfriend', role: 'street' }] },
   ];
   for (const p of plans) {
     let predA = 0, gotA = 0, predT = 0, gotT = 0;

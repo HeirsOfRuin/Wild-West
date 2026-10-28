@@ -8,7 +8,8 @@
 
 import { COUNTIES } from '../data/world.data.js';
 import { K, yearOf } from './state.js';
-import { followers, nudge, member, canBetray } from './gang.js';
+import { followers, nudge, nameOf, canBetray } from './gang.js';
+import { loseHouse } from './outfit.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const COVER_COUNTY = { kc: 'jackson', stjoe: 'buchanan', nashville: null };
@@ -37,11 +38,12 @@ function leaderRaid(s, rng, events, { where, pCapture, pKill, why, cause }) {
   }
 }
 
-/** Risk an informant brings a posse to where you are lying low. */
-export function informChance(s, county) {
+/** Risk an informant brings a posse to where you are lying low. A safe house you own cuts it. */
+export function informChance(s, county, atFarm = false) {
   if (!county) return 0;
   const drinker = followers(s).some((m) => m.traits.includes('drinker')) ? 1.5 : 1;
-  return clamp((s.reward / K(s, 'informScale')) * (1 - s.sym[county] / 100) * 0.35 * drinker, 0, 0.4);
+  const house = atFarm ? 1 : K(s, 'houseInform')[s.houses[county] || 0];
+  return clamp((s.reward / K(s, 'informScale')) * (1 - s.sym[county] / 100) * 0.35 * drinker * house, 0, 0.4);
 }
 
 /** Risk someone recognises Mr. Howard. */
@@ -56,7 +58,7 @@ export function recognitionChance(s, place) {
  */
 export function seasonPressure(s, ctx, rng, events) {
   const y = yearOf(s.t);
-  const whereCounty = ctx.where === 'farm' ? 'clay' : ctx.where;
+  const whereCounty = ctx.where === 'farm' ? s.home : ctx.where;
 
   // Posses give up.
   for (const c of COUNTIES) {
@@ -80,7 +82,7 @@ export function seasonPressure(s, ctx, rng, events) {
 
   // A turncoat leads them to you.
   if (s.raid && s.raid.t < s.t) {
-    const by = member(s, s.raid.by);
+    const by = { name: nameOf(s, s.raid.by) };
     s.raid = null;
     if (ctx.coverPlace === 'nashville') {
       s.cover.level = Math.max(0, s.cover.level - 50);
@@ -89,13 +91,15 @@ export function seasonPressure(s, ctx, rng, events) {
       leaderRaid(s, rng, events, { where: null, pCapture: 0.15, pKill: 0.06, cause: 'turncoat',
         why: `${by.name} led a posse to your door.` });
       if (ctx.coverPlace) s.cover.level = 0;
+      if (ctx.lieLow && ctx.where !== 'farm') loseHouse(s, whereCounty, events);
     }
     if (s.outcome) return;
   }
 
   // Informants where you hide.
-  if (ctx.lieLow && whereCounty && rng.chance(informChance(s, whereCounty))) {
+  if (ctx.lieLow && whereCounty && rng.chance(informChance(s, whereCounty, ctx.where === 'farm'))) {
     s.heat[whereCounty] = Math.min(100, s.heat[whereCounty] + 20);
+    if (ctx.where !== 'farm') loseHouse(s, whereCounty, events);
     leaderRaid(s, rng, events, { where: null, pCapture: 0.08 + s.heat[whereCounty] / 500, pKill: 0.04, cause: 'informant',
       why: `Someone in ${COUNTIES.find((c) => c.id === whereCounty).name} County wanted the reward more than they feared you.` });
     if (s.outcome) return;
@@ -116,23 +120,23 @@ function pinkertonOperation(s, ctx, rng, events) {
   const familyAtFarm = s.familyAt === 'farm';
   if (!s.flags.farmRaid && s.pinkerton >= 40 && (familyAtFarm || ctx.where === 'farm' || rng.chance(0.5))) {
     s.flags.farmRaid = s.t;
-    const archieDies = rng.chance(0.7);
     const fam = (id) => s.family.find((f) => f.id === id);
-    if (archieDies) fam('archie').alive = false;
-    fam('mother').injured = true;
-    s.sym.clay = clamp(s.sym.clay + 25, 0, 100);
-    for (const c of COUNTIES) if (c.id !== 'clay') s.sym[c.id] = clamp(s.sym[c.id] + 8, 0, 100);
+    const boy = fam('boy');
+    const boyDies = boy?.alive && rng.chance(0.7);
+    if (boyDies) boy.alive = false;
+    if (fam('mother')) fam('mother').injured = true;
+    s.sym[s.home] = clamp(s.sym[s.home] + 25, 0, 100);
+    for (const c of COUNTIES) if (c.id !== s.home) s.sym[c.id] = clamp(s.sym[c.id] + 8, 0, 100);
     s.pinkerton = clamp(s.pinkerton - 35, 0, 100);
     s.legend = clamp(s.legend + 5, 0, 100);
     events.push({ kind: 'bad', title: 'The raid on the farm',
-      text: `In the night Pinkerton men throw an iron flare-bomb through the kitchen window of your mother's house. ${archieDies ? 'Your half-brother Archie, still a boy, is killed. ' : ''}Your mother's right arm is torn away. All Missouri is disgusted. Even the papers that call you a murderer call this one an outrage.` });
+      text: `In the night Pinkerton men throw an iron flare-bomb through the kitchen window of your mother's house. ${boyDies ? `Your little brother ${boy.name.split(' ')[0]} is killed. ` : ''}Your mother's right arm is torn away. All Missouri is disgusted. Even the papers that call you a murderer call this one an outrage.` });
     if (familyAtFarm) {
       // The wife and children are hurt only if they were there.
-      for (const id of ['zee', 'jessejr', 'mary']) {
-        const f = fam(id);
-        if (f.alive && familyMemberPresent(s, id) && rng.chance(0.1)) {
+      for (const f of s.family.filter((x) => x.core && x.alive)) {
+        if (rng.chance(0.1)) {
           f.alive = false;
-          events.push({ kind: 'bad', text: `${id === 'zee' ? 'Zee' : id === 'jessejr' ? 'Your son' : 'Your daughter'} was in the house. They did not live.` });
+          events.push({ kind: 'bad', text: `${f.name.split(' ')[0]}, your ${f.rel}, was in the house. They did not live.` });
         }
       }
     }
@@ -150,7 +154,7 @@ function pinkertonOperation(s, ctx, rng, events) {
     events.push({ kind: 'warn', text: 'A stranger with a soft voice has been buying drinks in the saloons where your men drink. Nobody remembers who he talked to.' });
     return;
   }
-  const county = ctx.where === 'farm' ? 'clay' : ctx.where;
+  const county = ctx.where === 'farm' ? s.home : ctx.where;
   if (county && s.sym[county] >= 60) {
     s.pinkerton = clamp(s.pinkerton + 10, 0, 100);
     s.reward += 1000;
@@ -164,7 +168,3 @@ function pinkertonOperation(s, ctx, rng, events) {
   }
 }
 
-export function familyMemberPresent(s, id) {
-  const from = { zee: 1874, jessejr: 1875, mary: 1879 }[id];
-  return from === undefined || yearOf(s.t) >= from;
-}

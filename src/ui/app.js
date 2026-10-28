@@ -7,14 +7,15 @@ import { view, targetList, forecast, hideouts, band } from '../engine/derive.js'
 import { targetDef } from '../engine/job.js';
 import { retireNeeded } from '../engine/ending.js';
 import { COUNTIES, CASH_BAND } from '../data/world.data.js';
-import { TRAITS, FAMILY } from '../data/gang.data.js';
+import { TRAITS, BACKGROUNDS, GEAR } from '../data/gang.data.js';
+import { companionChoices, creationProblem, backgroundOf } from '../engine/people.js';
 import { CONFIG } from '../data/config.data.js';
 import { lsGet, lsSet, STORAGE_OK } from './storage.js';
-import { mapSvg } from './map.js';
+import { mapSvg, targetsIn } from './map.js';
 
 const app = document.getElementById('app');
 let S = null; // the game
-const U = { tab: 'season', screen: null, target: null, plan: null, give: 0, confirm: null, toast: null, showCode: false };
+const U = { tab: 'season', screen: null, target: null, plan: null, give: 0, confirm: null, toast: null, showCode: false, cr: null, county: null };
 
 const $ = (n) => `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -54,7 +55,7 @@ function doAct(a) {
 
 function bar(v) {
   return `<header class="bar">
-    <div class="date"><span>${v.date}</span><button class="help-link" data-act="help">How it works</button></div>
+    <div class="date"><span>${v.date}</span><span class="who">${esc(v.me.first)} ${esc(v.me.last)}</span><button class="help-link" data-act="help">How it works</button></div>
     <div class="stats">
       <span>Purse <b>${$(v.purse)}</b></span>
       <span>Legend <b>${v.legend}</b></span>
@@ -91,21 +92,62 @@ function lockLine(why) { return why ? `<div class="lock">${esc(why)}</div>` : ''
 // ---- screens --------------------------------------------------------------------
 
 function titleScreen() {
+  if (U.cr) return createScreen();
   const saved = load();
   return `<div class="title">
     <h1>Dead or Alive</h1>
     <div class="sub">Missouri, 1866–1882</div>
     <div class="rule"></div>
-    <p>You lead a band of outlaws after the war. Rob banks, trains and stagecoaches. Keep the counties on your side. Watch your own men. Nobody rides forever.</p>
+    <p>The war is over. You and a few of your own come home with your guns. Rob banks, trains and stagecoaches; buy better horses and safe houses; keep the counties on your side; watch your own men. Nobody rides forever.</p>
     <div class="btns" style="justify-content:center">
       ${saved && !saved.outcome ? `<button class="btn" data-act="continue">Continue (${dateOf(saved.t)})</button>` : ''}
-      <button class="btn ${saved && !saved.outcome ? 'secondary' : ''}" data-act="new">New game</button>
+      <button class="btn ${saved && !saved.outcome ? 'secondary' : ''}" data-act="new">New outlaw</button>
     </div>
     ${STORAGE_OK ? '' : '<p class="small">This browser will not keep a save here. Use the save code on the News tab to keep your game.</p>'}
     <details style="margin-top:24px;text-align:left"><summary>Load a save code</summary>
       <textarea id="code-in" placeholder="OUTLAW1.…"></textarea>
       <button class="btn small" data-act="import">Load</button></details>
   </div>`;
+}
+
+function companionsHtml(c) {
+  const want = backgroundOf(c.background).companions;
+  const picks = companionChoices(c.seed, c.last.trim() || 'Smith');
+  return `<h3>Who rides with you (${c.companions.length} of ${want})</h3>
+    <p class="small">Your brother and cousin are blood: they never sell you. The others might.</p>
+    ${picks.map((p) => `<button class="choice" data-act="cr-comp" data-v="${p.kind}" aria-pressed="${c.companions.includes(p.kind)}">
+      <b>${esc(p.name)}</b><span>${esc(p.rel)}. ${esc(p.pitch)}</span>
+      <small>Gun ${p.gun} · Nerve ${p.nerve} · Horse ${p.horse}${p.traits.length ? ` · ${p.traits.join(', ')}` : ''}</small></button>`).join('')}`;
+}
+
+function createScreen() {
+  const c = U.cr;
+  const bg = backgroundOf(c.background);
+  const statOf = (k) => 2 + (bg.bonus[k] || 0) + (c.bonus === k ? 1 : 0);
+  const why = creationProblem(c);
+  const seg = (act, value, label, on) => `<button data-act="${act}" data-v="${value}" aria-pressed="${on}">${label}</button>`;
+  return `<h1 style="margin-top:12px">A new outlaw</h1>
+    <div class="card"><h3>Your name</h3>
+      <div class="names"><label>First <input id="cr-first" value="${esc(c.first)}" maxlength="16" autocomplete="off"></label>
+      <label>Surname <input id="cr-last" value="${esc(c.last)}" maxlength="16" autocomplete="off"></label></div></div>
+    <div class="card"><h3>What the war made you</h3>
+      ${BACKGROUNDS.map((b) => `<button class="choice" data-act="cr-bg" data-v="${b.id}" aria-pressed="${c.background === b.id}">
+        <b>${esc(b.name)}</b><span>${esc(b.text)}</span>
+        <small>${[b.bonus.gun ? 'Gun +1' : '', b.bonus.nerve ? 'Nerve +1' : '', b.bonus.horse ? 'Horse +1' : '',
+          `legend ${b.legend}`, b.purse ? `$${b.purse} more` : '', b.reward ? `$${b.reward} reward on you already` : '',
+          b.southern ? `Southern counties +${b.southern}` : '', b.home ? `home county ${b.home > 0 ? '+' : ''}${b.home}` : '',
+          b.loyalty ? `companions +${b.loyalty} loyalty` : '', `${b.companions} companions`].filter(Boolean).join(' · ')}</small></button>`).join('')}
+    </div>
+    <div class="card"><h3>Home county</h3><p class="small">The family farm is here. Your home county likes you more, and hides you for nothing.</p>
+      <div class="seg">${COUNTIES.map((k) => seg('cr-home', k.id, `${k.name}`, c.home === k.id)).join('')}</div>
+      <p class="small">${esc(COUNTIES.find((k) => k.id === c.home).note)} Sympathy to start: ${COUNTIES.find((k) => k.id === c.home).base}.</p></div>
+    <div class="card"><h3>One more thing you are good at</h3>
+      <div class="seg">${seg('cr-bonus', 'gun', 'Gun', c.bonus === 'gun')}${seg('cr-bonus', 'nerve', 'Nerve', c.bonus === 'nerve')}${seg('cr-bonus', 'horse', 'Horse', c.bonus === 'horse')}</div>
+      <p class="skills" style="margin-top:6px">You: Gun ${statOf('gun')} · Nerve ${statOf('nerve')} · Horse ${statOf('horse')}</p>
+      <p class="small">Gun holds a street. Nerve handles a cashier. Horse outruns a posse. Skills run from 1 to 4.</p></div>
+    <div class="card" id="cr-comps">${companionsHtml(c)}</div>
+    ${lockLine(why)}
+    <div class="btns"><button class="btn" data-act="cr-start">Ride out</button><button class="btn secondary" data-act="cr-cancel">Back</button></div>`;
 }
 
 function seasonTab(v) {
@@ -116,6 +158,7 @@ function seasonTab(v) {
     return parts.join('');
   }
   if (S.report) parts.push(`<details><summary>Last season: ${esc(dateOf(S.report.t))}</summary>${paper(S.report)}</details>`);
+  if (S.stateLine?.t === S.t) parts.push(`<div class="statebox"><span class="t">The State · ${esc(v.date)}</span>${esc(S.stateLine.text)}</div>`);
   parts.push(`<h2>${v.date}: what will you do?</h2>`);
   if (v.retired) {
     const left = retireNeeded(S) - (S.t - v.retired.since);
@@ -236,40 +279,67 @@ function coverScreen(v) {
       ${lockLine(o.lock)}<button class="btn block" data-act="cover" data-v="${o.id}" ${o.lock ? 'disabled' : ''}>Live here this season</button></div>`).join('')}`;
 }
 
+function gearLine(m) {
+  return `${esc(GEAR.horse[m.gear.horse].name)}, ${esc(GEAR.gun[m.gear.gun].name)}`;
+}
+
 function gangTab(v) {
   const recruits = v.recruits;
+  const rel = (m) => (m.kin === 'family' ? m.rel || 'your kin' : m.kin ? `${m.kin} kin` : m.rel);
   return `<h2>The gang</h2>
-    <p class="small">You cannot see what a man thinks, only how he seems. New men are hard to read; the longer he rides with you, the truer the read. Broke men, idle men and frightened men turn. A share, a bonus or a stake to go home on buys goodwill.</p>
+    <p class="small">You cannot see what a man thinks, only how he seems. New men are hard to read; the longer he rides with you, the truer the read. Broke, idle and frightened men turn. Each man costs ${$(K(S, 'keepPerMan'))} a season in keep.</p>
     ${v.gang.map((m) => `<div class="card"><div class="row"><h3>${esc(m.name)}</h3><span class="small">${m.leader ? 'You' : `${m.mood.word}${m.mood.readable ? '' : ' (hard to read)'}`}</span></div>
-      <div class="skills">Gun ${m.gun} · Nerve ${m.nerve} · Horse ${m.horse}${m.leader ? '' : ` · pocket ${$(m.pocket)}`}</div>
-      <div>${m.traits.map((t) => `<span class="tag">${t}</span>`).join('')}${m.kin && !m.leader ? `<span class="tag">${m.kin === 'james' ? 'your kin' : `${m.kin} kin`}</span>` : ''}${m.wounded ? '<span class="tag bad">wounded</span>' : ''}${m.suspected ? '<span class="tag warn">suspected</span>' : ''}</div>
+      <div class="skills">Gun ${m.base.gun}${m.gear.gun ? `<b>+${m.gun - m.base.gun}</b>` : ''} · Nerve ${m.nerve} · Horse ${m.base.horse}${m.gear.horse ? `<b>+${m.horse - m.base.horse}</b>` : ''}${m.leader ? '' : ` · pocket ${$(m.pocket)}`} · ${m.jobs} job${m.jobs === 1 ? '' : 's'}</div>
+      <div class="small">Rides ${gearLine(m)}.</div>
+      <div>${!m.leader && rel(m) ? `<span class="tag">${esc(rel(m))}</span>` : ''}${m.traits.map((t) => `<span class="tag" title="${esc(TRAITS[t])}">${t}</span>`).join('')}${m.wounded ? '<span class="tag bad">wounded</span>' : ''}${m.suspected ? '<span class="tag warn">suspected</span>' : ''}</div>
       ${m.traits.map((t) => `<div class="small">${t}: ${esc(TRAITS[t])}</div>`).join('')}
+      <div class="btns">${m.outfit.filter((o) => !o.done).map((o) => `<button class="btn small" data-act="buy" data-id="${m.id}" data-item="${o.item}" ${o.lock ? 'disabled' : ''} title="${esc(o.lock || '')}">Buy ${esc(o.next)} (${$(o.cost)})</button>`).join('')}
+        ${m.wounded ? `<button class="btn small" data-act="doctor" data-id="${m.id}" ${m.doctor.lock ? 'disabled' : ''}>A doctor (${$(m.doctor.cost)})</button>` : ''}</div>
+      ${m.outfit.filter((o) => !o.done && o.lock).map((o) => `<div class="small">${o.item === 'horse' ? 'Horse' : 'Guns'}: ${esc(o.lock)}</div>`).join('')}
       ${m.leader ? '' : U.confirm === m.id ? `<p class="blood">Kill ${esc(m.short)}? Every man will fear you, his kin may ride off, and the counties will hear of it.</p>
         <div class="btns"><button class="btn danger small" data-act="kill" data-id="${m.id}">Do it</button><button class="btn secondary small" data-act="unconfirm">No</button></div>`
-      : `<div class="btns">
+      : `<details><summary>Pay, send home, or worse</summary><div class="btns">
         <button class="btn small secondary" data-act="bonus" data-id="${m.id}" ${v.purse < 100 ? 'disabled' : ''}>Pay him ${$(100)}</button>
         <button class="btn small secondary" data-act="dismiss" data-id="${m.id}" data-stake="1" ${v.purse < K(S, 'stake') ? 'disabled' : ''}>Send home with ${$(K(S, 'stake'))}</button>
         <button class="btn small secondary" data-act="dismiss" data-id="${m.id}">Send home with nothing</button>
-        <button class="btn small secondary" data-act="confirm" data-id="${m.id}">Kill him</button></div>`}
+        <button class="btn small secondary" data-act="confirm" data-id="${m.id}">Kill him</button></div></details>`}
     </div>`).join('')}
     <h2>Men looking for you</h2>
-    ${recruits.length ? recruits.map((r) => `<div class="card ${r.lock ? 'locked' : ''}"><h3>${esc(r.name)}</h3><p>${esc(r.pitch)}</p>${lockLine(r.lock)}
+    ${recruits.length ? recruits.map((r) => `<div class="card ${r.lock ? 'locked' : ''}"><div class="row"><h3>${esc(r.name)}</h3><span class="small">${r.leaves <= 0 ? 'leaves after this season' : 'here two seasons'}</span></div>
+      <div class="skills">Gun ${r.gun} · Nerve ${r.nerve} · Horse ${r.horse}${r.traits.length ? ` · ${r.traits.join(', ')}` : ''}${r.known ? ' · <b>a known man</b>' : ''}</div>
+      <p>${esc(r.pitch)}</p>${lockLine(r.lock)}
       <button class="btn small" data-act="recruit" data-id="${r.id}" ${r.lock ? 'disabled' : ''}>Take him on (${$(K(S, 'recruitCost'))})</button></div>`).join('')
-      : `<p class="small">Nobody yet. New men come looking as the years pass and your name spreads.</p>`}
+      : `<p class="small">Nobody this season. More men come, and better ones, as your legend grows (legend 15 brings one a season, 40 brings two).</p>`}
     ${v.gone.length ? `<h2>Gone</h2><ul class="events">${v.gone.map((g) => `<li class="${g.status === 'dead' ? 'bad' : ''}">${esc(g.name)}: ${{ dead: 'dead', captured: 'in prison', gone: 'gone home', turned: 'turned on you' }[g.status]}</li>`).join('')}</ul>` : ''}
     <h2>Family</h2>
-    <ul class="events">${FAMILY.filter((f) => yearOf(S.t) >= f.from).map((f) => { const st = S.family.find((x) => x.id === f.id); return `<li class="${st.alive ? '' : 'bad'}">${esc(f.name)}, your ${f.rel}${st.alive ? (st.injured ? ' (maimed)' : '') : ' (dead)'}</li>`; }).join('')}
-    </ul><p class="small">Family lives ${S.familyAt === 'farm' ? 'at the farm in Clay County' : `with you in ${coverName(S.familyAt)}`}.</p>`;
+    <ul class="events">${v.family.map((f) => `<li class="${f.alive ? '' : 'bad'}">${esc(f.name)}, your ${esc(f.rel)}${f.alive ? (f.injured ? ' (maimed)' : '') : ' (dead)'}</li>`).join('')}</ul>
+    <p class="small">The family lives ${S.familyAt === 'farm' ? `on the farm in ${esc(COUNTIES.find((c) => c.id === v.home).name)} County` : `with you in ${coverName(S.familyAt)}`}.</p>
+    ${v.married ? '' : `<div class="card"><h3>Marry</h3><p>A wife and a farm are what a man retires to. You cannot quit the life without one. ${$(K(S, 'marryCost'))} for the wedding and a house.</p>
+      ${lockLine(v.marry)}<button class="btn small" data-act="marry" ${v.marry ? 'disabled' : ''}>Marry</button></div>`}`;
 }
 
 function mapTab(v) {
+  const id = U.county || v.home;
+  const c = COUNTIES.find((k) => k.id === id);
+  const house = v.houseOptions.find((o) => o.county === id);
+  const br = v.bribe[id];
+  const level = v.houses[id] || 0;
   return `<h2>Western Missouri</h2>
-    ${mapSvg(v, S.where)}
-    <div class="key"><span><i style="background:var(--sym-hi)"></i>Will hide you</span><span><i style="background:var(--sym-mid)"></i>Wavering</span><span><i style="background:var(--sym-lo)"></i>Hostile (no safe house under ${K(S, 'safeSym')})</span><span>▲ posse heat</span><span>★ you</span></div>
-    <p class="small">Sympathy falls when you rob a county's own bank, kill a townsman or a cashier, and as the war fades. It rises with generosity, with Pinkerton outrages, and in Southern counties when you rob the railroads or write to Edwards.</p>
-    ${COUNTIES.map((c) => `<div class="card"><div class="row"><h3>${c.name} County</h3><span class="small">${c.town}</span></div>
-      <div class="small">Sympathy ${v.sym[c.id]} · heat ${v.heat[c.id]} · informer risk ${band(v.risks.inform[c.id])} · ${v.safe[c.id] ? 'safe houses' : 'no safe house'}</div>
-      <div class="meter"><i style="width:${v.sym[c.id]}%"></i></div><p class="small">${esc(c.note)}</p></div>`).join('')}`;
+    ${mapSvg(v, id)}
+    <div class="key"><span><i style="background:var(--sym-hi)"></i>Friendly (55+)</span><span><i style="background:var(--sym-mid)"></i>Wavering</span><span><i style="background:var(--sym-lo)"></i>Hostile (under 35)</span><span><b class="blood">▲</b> posse heat</span><span><b class="blood">⌂</b> the farm</span><span>⌂ your safe house</span><span><b class="blood">★</b> you</span><span>┼┼ railroad</span></div>
+    <p class="small">Tap a county.</p>
+    <div class="card"><div class="row"><h3>${c.name} County</h3><span class="small">${c.town}${id === v.home ? ' · home' : ''}</span></div>
+      <p class="small">${esc(c.note)}</p>
+      <dl class="kv"><dt>Sympathy</dt><dd>${v.sym[id]} ${v.safe[id] ? '(will hide you)' : `(will not hide you: needs ${level ? K(S, 'houseSym') : K(S, 'safeSym')})`}</dd>
+        <dt>Posse heat</dt><dd>${v.heat[id]}</dd>
+        <dt>Informers</dt><dd>${band(v.risks.inform[id])}</dd>
+        <dt>To rob</dt><dd>${targetsIn(id).map((t) => esc(t.name.split(',')[0])).join('; ')}</dd>
+        <dt>Your house</dt><dd>${level ? (level === 2 ? 'A hidden room and fresh horses' : 'A safe house') : 'None'}</dd></dl>
+      ${house.done ? '' : `<p class="small" style="margin-top:8px"><b>${esc(house.name)}</b>: ${esc(house.text)} ${level ? `Informer risk a quarter; posses catch you less often when you run here.` : `Hide here down to sympathy ${K(S, 'houseSym')}, no fee, half the informer risk.`} Then ${$(K(S, 'houseUpkeep'))} a season. Lost if a posse raids it.</p>
+        ${lockLine(house.lock)}<button class="btn small" data-act="house" data-v="${id}" ${house.lock ? 'disabled' : ''}>${esc(house.name)} (${$(house.cost)})</button>`}
+      <p class="small" style="margin-top:8px"><b>Pay off the sheriff</b>: halves the posse heat. ${$(K(S, 'bribePerHeat'))} a point of heat${c.southern ? '' : ', double in a Union county'}.</p>
+      ${lockLine(br.lock)}<button class="btn small secondary" data-act="bribe" data-v="${id}" ${br.lock ? 'disabled' : ''}>Pay him (${$(br.cost)})</button>
+    </div>`;
 }
 
 function newsTab(v) {
@@ -294,7 +364,8 @@ function helpScreen() {
   <div class="card"><h3>Three pursuers</h3><p><b>Posses</b>: heat per county, halving each season. <b>Pinkertons</b> (from ${C.pinkStartYear} or your first train): slow to fade, they infiltrate the gang and come for the family. <b>The reward</b>: barely fades; it tempts informers in hostile counties and the men in your gang.</p></div>
   <div class="card"><h3>Sympathy</h3><p>A county under ${C.safeSym} will not hide you. Robbing its bank costs ${C.symBank} (your home county ${C.symHomeBank}). Southern counties like train jobs (+${C.symTrain}). The war fades from ${C.warFadeFrom}.</p></div>
   <div class="card"><h3>Loyalty</h3><p>Hidden. Each man spends ${$(C.livingCost)} a season; broke, idle or frightened men turn. Turning takes seasons and shows signs. Your own kin never sell you.</p></div>
-  <div class="card"><h3>Ending</h3><p>Killed, captured or betrayed ends it. To win, retire from ${C.retireFrom}: the gang gone, cover ${C.retireNeedCover}+, ${$(C.retireNeedPurse)} saved, the family alive; then survive ${C.retireSeasons} quiet seasons, plus one for every ${C.retireSeasonsPerLegend} points of your peak legend. After ${C.endYear} the era is over.</p></div>`;
+  <div class="card"><h3>The outfit</h3><p>Better horses and guns add half a point a step to a man's riding or shooting, and go where he goes. Safe houses let you hide where friends will not, and fresh horses there shake posses. A paid sheriff halves a county's heat. Men who come through a job unhurt sometimes get better at the work they did. Each man costs ${$(C.keepPerMan)} a season in keep.</p></div>
+  <div class="card"><h3>Ending</h3><p>Killed, captured or betrayed ends it. To win, marry, then retire: the gang gone, cover ${C.retireNeedCover}+, ${$(C.retireNeedPurse)} saved, the family alive; then survive ${C.retireSeasons} quiet seasons, plus one for every ${C.retireSeasonsPerLegend} points of your peak legend. After ${C.endYear} the era is over.</p></div>`;
 }
 
 function endScreen(v) {
@@ -352,9 +423,10 @@ function defaultPlan() {
   if (byNerve[1]) crew[byNerve[1].id] = 'inside';
   const rest = others.filter((m) => crew[m.id] === 'stay').sort((a, b) => b.horse - a.horse);
   if (rest[0]) crew[rest[0].id] = 'horses';
-  if (!byNerve[0]) crew.jesse = 'inside';
+  if (!byNerve[0]) crew.me = 'inside';
   const def = targetDef(U.target);
-  const hide = hideouts(S, def).filter((h) => !h.lock).sort((a, b) => (S.sym[b.id === 'farm' ? 'clay' : b.id] ?? 0) - (S.sym[a.id === 'farm' ? 'clay' : a.id] ?? 0))[0];
+  const hs = (h) => (S.sym[h.id === 'farm' ? S.home : h.id] ?? 0) + (h.own ? 20 : 0);
+  const hide = hideouts(S, def).filter((h) => !h.lock).sort((a, b) => hs(b) - hs(a))[0];
   return { crew, approach: def.kind === 'bank' ? 'quiet' : 'bold', hideout: hide?.id ?? null, cut: 'even' };
 }
 
@@ -364,7 +436,34 @@ app.addEventListener('click', (ev) => {
   if (el.dataset.tab) { U.tab = el.dataset.tab; U.screen = null; window.scrollTo(0, 0); return render(); }
   const d = el.dataset;
   switch (d.act) {
-    case 'new': S = newGame((Date.now() ^ (Math.random() * 1e9)) >>> 0); save(); Object.assign(U, { tab: 'season', screen: null, target: null }); break;
+    case 'new': S = null; U.cr = { seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, first: '', last: '', background: 'bushwhacker', home: 'clay', bonus: 'horse', companions: ['brother', 'cousin', 'warfriend'] }; break;
+    case 'cr-bg': {
+      U.cr.background = d.v;
+      const want = backgroundOf(d.v).companions;
+      while (U.cr.companions.length > want) U.cr.companions.pop();
+      break;
+    }
+    case 'cr-home': U.cr.home = d.v; break;
+    case 'cr-bonus': U.cr.bonus = d.v; break;
+    case 'cr-comp': {
+      const list = U.cr.companions;
+      const want = backgroundOf(U.cr.background).companions;
+      if (list.includes(d.v)) U.cr.companions = list.filter((x) => x !== d.v);
+      else if (list.length < want) list.push(d.v);
+      else U.toast = `You can take ${want}. Unpick one first.`;
+      break;
+    }
+    case 'cr-cancel': U.cr = null; break;
+    case 'cr-start':
+      try { S = newGame(U.cr.seed, {}, U.cr); U.cr = null; save(); Object.assign(U, { tab: 'season', screen: null, target: null, county: null }); }
+      catch (e) { U.toast = e.message; }
+      break;
+    case 'buy': return doAct({ type: 'buy', id: d.id, item: d.item });
+    case 'doctor': return doAct({ type: 'doctor', id: d.id });
+    case 'house': return doAct({ type: 'house', county: d.v });
+    case 'bribe': return doAct({ type: 'bribe', county: d.v });
+    case 'marry': return doAct({ type: 'marry' });
+    case 'county': U.county = d.id; break;
     case 'continue': S = load(); break;
     case 'import': try { S = fromCode(document.getElementById('code-in').value); save(); } catch (e) { U.toast = e.message; } break;
     case 'quit': S = null; break;
@@ -407,6 +506,18 @@ app.addEventListener('click', (ev) => {
   }
   if (['pick', 'untarget', 'screen', 'back', 'help', 'done'].includes(d.act)) window.scrollTo(0, 0);
   render();
+});
+
+// Names are typed, not clicked: keep them in the creation state as they change.
+app.addEventListener('input', (ev) => {
+  if (!U.cr) return;
+  if (ev.target.id === 'cr-first') U.cr.first = ev.target.value;
+  if (ev.target.id === 'cr-last') U.cr.last = ev.target.value;
+});
+// A surname changes your brother's name. Redraw only the companions, never the
+// fields: a full redraw would drop the keyboard on a phone mid-typing.
+app.addEventListener('change', (ev) => {
+  if (U.cr && ev.target.id === 'cr-last') document.getElementById('cr-comps').innerHTML = companionsHtml(U.cr);
 });
 
 const theme = lsGet('outlaw.theme');

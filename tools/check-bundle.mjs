@@ -20,6 +20,9 @@ console.log('title renders from file://   ', title ? 'yes' : 'NO');
 if (!title) errors.push('no title from file://');
 else {
   await page.click('[data-act="new"]');
+  await page.fill('#cr-first', 'Ike');
+  await page.fill('#cr-last', 'Carver');
+  await page.click('[data-act="cr-start"]');
   await page.click('[data-screen="job"]');
   await page.locator('[data-act="pick"]').first().click();
   await page.click('[data-act="ride"]');

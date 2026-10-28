@@ -5,12 +5,12 @@
 // so the save needs no generator state and a reload cannot reroll anything.
 
 import { COUNTIES, TARGETS } from '../data/world.data.js';
-import { GANG, FAMILY } from '../data/gang.data.js';
 import { CONFIG } from '../data/config.data.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
+import { DEFAULT_CREATION, creationProblem, companionChoices, makeLeader, makeMember, startingFamily, backgroundOf } from './people.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = 'outlaw.save.v1'; // a contract: never rename
 
 /** A tuning number, with any override this game was started with (ablations). */
@@ -40,6 +40,10 @@ export function rollTarget(seed, t, def, prev) {
     rollG: luck(), rollF: luck(),
   };
 }
+/** A state-news effect in force this year (see news.data.js and season.js). */
+export const modActive = (s, key) => !!s.mods?.[key] && yearOf(s.t) <= s.mods[key].until;
+/** Cash in the vault after the times: the Panic of 1873 thins the country banks. */
+export const cashOf = (s, def, cash) => Math.round(def.kind === 'bank' && modActive(s, 'bankCash') ? cash * s.mods.bankCash.x : cash);
 /** Scouting holds until the new year re-rolls the town's luck, or until you rob it. */
 export const intelValid = (s, id) => !!s.intel[id] && yearOf(s.intel[id].t) === yearOf(s.t);
 export const trueGuard = (def, t) => Math.max(0, Math.min(3, def.guard + t.boostG + t.rollG));
@@ -48,17 +52,28 @@ export const trueFight = (def, t) => Math.max(0, Math.min(3, def.fight + t.boost
 export const believedGuard = (def, t) => Math.max(0, Math.min(3, def.guard + t.boostG));
 export const believedFight = (def, t) => Math.max(0, Math.min(3, def.fight + t.boostF));
 
-export function newGame(seed = 1, tune = {}) {
+/**
+ * A new game from the creation choices (see people.js DEFAULT_CREATION).
+ * Throws with a reason if the choices are incomplete.
+ */
+export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
+  const why = creationProblem(creation);
+  if (why) throw new Error(why);
+  const bg = backgroundOf(creation.background);
+  const leader = makeLeader(creation);
+  const picks = companionChoices(seed, creation.last.trim()).filter((c) => creation.companions.includes(c.kind));
   const s = {
     v: SAVE_VERSION,
     seed: seed >>> 0,
     t: 0,
     tune,
+    me: { first: creation.first.trim(), last: creation.last.trim(), background: bg.id, home: creation.home },
+    home: creation.home,
     purse: 0,
     ledger: [],
-    legend: 10,
-    legendPeak: 10,
-    reward: 0,
+    legend: bg.legend,
+    legendPeak: bg.legend,
+    reward: bg.reward,
     pinkerton: 0,
     pinkActive: false,
     heat: Object.fromEntries(COUNTIES.map((c) => [c.id, 0])),
@@ -68,11 +83,14 @@ export function newGame(seed = 1, tune = {}) {
     cover: { level: 0, place: null },
     where: 'farm',
     familyAt: 'farm',
-    family: FAMILY.map((f) => ({ id: f.id, alive: true, injured: false })),
-    gang: GANG.map((g) => ({
-      id: g.id, loyalty: g.loyalty, pocket: 150, status: 'active', joined: 0,
-      rode: 8, wounded: 0, stage: 0, approached: false, suspected: false, bonusT: -1, noise: 0,
-    })),
+    married: false,
+    family: startingFamily(seed, creation.last.trim()),
+    gang: [leader, ...picks.map((c) => makeMember({ ...c, id: c.id, loyalty: c.loyalty + bg.loyalty, pocket: 120, rode: c.kin ? 30 : 8 }))],
+    offers: [],
+    nextId: 1,
+    houses: {},
+    bribed: {},
+    mods: {},
     targets: {},
     intel: {},
     scouts: 0,
@@ -86,18 +104,55 @@ export function newGame(seed = 1, tune = {}) {
     outcome: null,
     hist: [],
     dead: [],
-    stats: { jobs: 0, take: 0, cashiers: 0, bystanders: 0, failed: 0, letters: 0 },
+    stats: { jobs: 0, take: 0, cashiers: 0, bystanders: 0, failed: 0, letters: 0, spent: 0 },
     report: null,
     log: [],
   };
+  for (const c of COUNTIES) if (c.southern) s.sym[c.id] += bg.southern;
+  s.sym[s.home] = Math.max(0, Math.min(100, s.sym[s.home] + bg.home + 8)); // home is home
   for (const def of TARGETS) s.targets[def.id] = rollTarget(s.seed, 0, def);
-  pay(s, K(s, 'startPurse'), 'What is left from the war');
-  s.log.push({ t: 0, kind: 'story', text: 'The war is over. Not for you. Quantrill is dead, Bloody Bill is dead, and the men who rode with them cannot go home to vote, preach or practise law. Some of them still have their horses.' });
+  pay(s, K(s, 'startPurse') + bg.purse, 'What you came home with');
+  const homeName = COUNTIES.find((c) => c.id === s.home).name;
+  s.log.push({ t: 0, kind: 'story', text: `The war is over. Not for ${s.me.first} ${s.me.last}. You are back on the farm in ${homeName} County with ${picks.map((p) => p.name).join(', ')}, and none of you means to plough.` });
   return s;
 }
 
+// Version 1 was the historical prototype: Jesse James and the full gang, with
+// the men's fixed data in tables that no longer exist. Their numbers are kept
+// here so an old save opens and plays on.
+const V1_MEN = {
+  jesse: ['Jesse James', 'Jesse', 'james', 3, 2, 3, ['hothead']], frank: ['Frank James', 'Frank', 'james', 2, 3, 2, ['steady']],
+  cole: ['Cole Younger', 'Cole', 'younger', 3, 3, 2, ['greedy']], jim: ['Jim Younger', 'Jim', 'younger', 2, 2, 2, []],
+  bob: ['Bob Younger', 'Bob Y.', 'younger', 2, 1, 3, ['young']], clell: ['Clell Miller', 'Clell', 'miller', 2, 2, 2, []],
+  cummins: ['Jim Cummins', 'Cummins', null, 1, 1, 2, ['drinker']], pitts: ['Charlie Pitts', 'Pitts', null, 2, 2, 1, ['steady']],
+  chadwell: ['Bill Chadwell', 'Chadwell', null, 2, 1, 2, ['greedy']], liddil: ['Dick Liddil', 'Liddil', null, 2, 1, 3, ['drinker']],
+  hite: ['Wood Hite', 'Hite', 'james', 2, 2, 2, []], edmiller: ['Ed Miller', 'Ed', 'miller', 1, 2, 2, ['young']],
+  charley: ['Charley Ford', 'Charley', 'ford', 1, 1, 2, []], bobford: ['Bob Ford', 'Bob Ford', 'ford', 2, 2, 1, ['ambitious', 'young']],
+};
 const MIGRATIONS = {
-  // 1: (s) => ({ ...s, v: 2, ... }),
+  1: (s) => {
+    const gang = s.gang.map((g) => {
+      const [name, short, kin, gun, nerve, horse, traits] = V1_MEN[g.id];
+      const leader = g.id === 'jesse';
+      return { ...g, id: leader ? 'me' : g.id, name, short, kin: kin === 'james' ? 'family' : kin, leader, gun, nerve, horse, traits,
+        gear: { horse: 0, gun: 0 }, jobs: 0, rel: null, pitch: '' };
+    });
+    const fam = { mother: ['Zerelda Samuel', 'mother'], archie: ['Archie Samuel', 'little brother'], zee: ['Zee Mimms', 'wife'],
+      jessejr: ['Jesse Edward James', 'son'], mary: ['Mary James', 'daughter'] };
+    const year = 1866 + Math.floor(s.t / 4);
+    const born = { zee: 1874, jessejr: 1875, mary: 1879 };
+    const family = s.family.filter((f) => !born[f.id] || year >= born[f.id])
+      .map((f) => ({ ...f, id: f.id === 'archie' ? 'boy' : f.id, name: fam[f.id][0], rel: fam[f.id][1] }));
+    const fixWho = (x) => (x === 'jesse' ? 'me' : x);
+    return {
+      ...s, v: 2, gang, family, married: year >= 1874,
+      me: { first: 'Jesse', last: 'James', background: 'bushwhacker', home: 'clay' }, home: 'clay',
+      offers: [], nextId: 1, houses: {}, bribed: {}, mods: {},
+      stats: { ...s.stats, spent: 0 },
+      dead: s.dead.map((d) => ({ ...d, id: fixWho(d.id) })),
+      ambush: s.ambush ? { by: fixWho(s.ambush.by) } : null,
+    };
+  },
 };
 export function migrate(s) {
   if (!s || typeof s.v !== 'number') throw new Error('Not a save from this game.');

@@ -3,9 +3,9 @@
 // never a retelling.
 
 import { TARGETS, NORTHFIELD, KINDS, LINKS, COUNTIES } from '../data/world.data.js';
-import { K, yearOf, trueGuard, trueFight, intelValid } from './state.js';
+import { K, yearOf, trueGuard, trueFight, intelValid, cashOf, modActive } from './state.js';
 import { pay } from './money.js';
-import { member, members, nudge, defOf } from './gang.js';
+import { members, nudge, rawMember, learn } from './gang.js';
 import {
   crewStats, planProblem, alarmChance, vaultPower, vaultNeed, takeFraction, insideKillChance,
   townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, legendGain,
@@ -23,14 +23,21 @@ export function hideouts(s, def) {
     const near = c.id === from || adjacent(c.id, from);
     let lock = null;
     if (!def.far && !near) lock = 'Too far to ride before the wires catch you.';
-    else if (s.sym[c.id] < K(s, 'safeSym')) lock = `Nobody in ${c.name} will hide you (sympathy under ${K(s, 'safeSym')}).`;
-    out.push({ id: c.id, name: `${c.name} safe house`, lock });
+    else if (s.sym[c.id] < hideSym(s, c.id)) lock = `Nobody in ${c.name} will hide you (sympathy under ${hideSym(s, c.id)}).`;
+    const own = s.houses[c.id] || 0;
+    out.push({ id: c.id, name: own ? `Your ${own === 2 ? 'hidden room' : 'safe house'} in ${c.name}` : `Friends in ${c.name}`, lock, own });
   }
-  const farmNear = def.far || from === 'clay' || adjacent('clay', from);
-  out.unshift({ id: 'farm', name: 'The family farm, Clay County', lock: farmNear ? null : 'Too far from Clay County.' });
+  const home = COUNTIES.find((c) => c.id === s.home);
+  const farmNear = def.far || from === s.home || adjacent(s.home, from);
+  out.unshift({ id: 'farm', name: `The family farm, ${home.name} County`, lock: farmNear ? null : `Too far from ${home.name} County.`, own: 0 });
   return out;
 }
-export const hideoutCounty = (h) => (h === 'farm' ? 'clay' : h);
+/** The county a hideout is in: the farm is in your home county. */
+export const hideoutCounty = (s, h) => (h === 'farm' ? s.home : h);
+/** The sympathy a county needs to hide you: lower where you keep a house. */
+export const hideSym = (s, county) => (s.houses[county] ? K(s, 'houseSym') : K(s, 'safeSym'));
+/** Fresh horses waiting at a level-2 house make a posse less likely to catch you. */
+export const freshHorses = (s, hideout) => (hideout !== 'farm' && (s.houses[hideout] || 0) >= 2 ? K(s, 'houseCatch') : 0);
 
 export function targetOpen(s, def) {
   if (def.far) return s.flags.northfieldOffer === s.t ? null : 'Not on offer.';
@@ -56,7 +63,7 @@ export function runJob(s, plan, rng, events) {
     const m = all.find((x) => x.id === c.id);
     if (!m || m.status !== 'active') throw new Error(`${c.id} is not riding with you.`);
   }
-  if (!plan.crew.some((c) => c.id === 'jesse')) throw new Error('You ride on every job.');
+  if (!plan.crew.some((c) => c.id === 'me')) throw new Error('You ride on every job.');
   const st = crewStats(all, plan.crew);
   const problem = planProblem(st);
   if (problem) throw new Error(problem);
@@ -99,7 +106,7 @@ export function runJob(s, plan, rng, events) {
   const need = vaultNeed(guard, def.kind);
   let frac = takeFraction({ approach: plan.approach, alarm, power, need });
   if (def.far && frac > 0) frac = Math.min(frac, 0.01); // Northfield: the cashier said the time lock was set. It was not.
-  const take = Math.round(tgt.cash * frac * (0.85 + 0.15 * rng.next()));
+  const take = Math.round(cashOf(s, def, tgt.cash) * frac * (0.85 + 0.15 * rng.next()));
   if (def.far) beats.push(`The cashier swears the vault is on a time lock. It is not, but you do not know that. He will not open it even with a knife at his throat.`);
   else if (frac >= 0.9) beats.push(`The ${def.kind === 'train' ? 'express safe' : 'vault'} comes open. ${def.kind === 'stage' ? 'Watches, pocketbooks and the strongbox' : 'Notes, gold and silver'} go in the sack.`);
   else if (frac > 0) beats.push(`You get some of it — the ${def.kind === 'train' ? 'messenger' : 'cashier'} stalls and the rest stays behind.`);
@@ -110,7 +117,7 @@ export function runJob(s, plan, rng, events) {
     hothead: st.hotheadInside, steady: st.steadyInside, insideNerve: st.insideNerve });
   let cashierKilled = rng.chance(pKill);
   let gallatin = false;
-  if (def.id === 'gallatin-bank' && !s.flags.gallatin && st.inside.some((m) => m.id === 'jesse') && yearOf(s.t) <= 1870 && rng.chance(0.5)) {
+  if (def.id === 'gallatin-bank' && !s.flags.gallatin && st.inside.some((m) => m.leader) && yearOf(s.t) <= 1870 && rng.chance(0.5)) {
     cashierKilled = true;
     gallatin = true;
     s.flags.gallatin = s.t;
@@ -148,9 +155,9 @@ export function runJob(s, plan, rng, events) {
   // 5. The ride to the hideout.
   const killed = cashierKilled || bystanders > 0;
   const Q = posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed });
-  const symTo = s.sym[hideoutCounty(plan.hideout)] ?? 0;
+  const symTo = s.sym[hideoutCounty(s, plan.hideout)] ?? 0;
   const woundedNow = st.wounded + casualties.filter((c) => c.fate === 'wounded').length;
-  const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: woundedNow, far: !!def.far });
+  const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: woundedNow, far: !!def.far, fresh: freshHorses(s, plan.hideout) });
   let caught = rng.chance(pCatch);
   let loot = take;
   if (caught) {
@@ -174,12 +181,12 @@ export function runJob(s, plan, rng, events) {
   // Fates.
   for (const c of casualties) {
     const g = s.gang.find((x) => x.id === c.id);
-    const name = defOf(c.id).name;
+    const name = g.name;
     if (c.fate === 'wounded') {
       g.wounded = 2;
       beats.push(`${name} is hit ${c.where} but stays in the saddle.`);
     } else if (c.fate === 'killed') {
-      if (defOf(c.id).leader) {
+      if (g.leader) {
         s.outcome = { kind: 'killed', cause: 'job', t: s.t, text: `You were shot from your horse ${c.where} at ${def.name}. They propped your body up for a photograph.` };
       } else {
         g.status = 'dead'; g.diedT = s.t;
@@ -187,7 +194,7 @@ export function runJob(s, plan, rng, events) {
         beats.push(`${name} is killed ${c.where}.`);
       }
     } else if (c.fate === 'captured') {
-      if (defOf(c.id).leader) {
+      if (g.leader) {
         s.outcome = { kind: 'captured', cause: 'job', t: s.t, text: `They took you alive ${c.where} after ${def.name}. The trial will be short.` };
       } else {
         g.status = 'captured'; g.capturedT = s.t;
@@ -216,19 +223,23 @@ export function runJob(s, plan, rng, events) {
     : 'The take: nothing.');
 
   // Grief and fear.
-  const lost = casualties.filter((c) => c.fate === 'killed' || c.fate === 'captured').filter((c) => !defOf(c.id).leader);
+  const lost = casualties.filter((c) => c.fate === 'killed' || c.fate === 'captured').filter((c) => !rawMember(s, c.id).leader);
   for (const c of lost) {
     for (const m of members(s).filter((x) => x.status === 'active' && !x.leader)) {
-      nudge(s, m.id, -(m.kin && m.kin === defOf(c.id).kin ? K(s, 'kinDeath') : K(s, 'comradeDeath')));
+      nudge(s, m.id, -(m.kin && m.kin === rawMember(s, c.id).kin ? K(s, 'kinDeath') : K(s, 'comradeDeath')));
     }
   }
 
   // The world's answer.
-  const isHome = county === 'clay';
+  const isHome = county === s.home;
   if (!def.far) {
     if (def.kind === 'bank') s.sym[county] -= isHome ? K(s, 'symHomeBank') : K(s, 'symBank');
     if (def.kind === 'stage') s.sym[county] -= K(s, 'symStage');
-    if (def.kind === 'train') for (const c of COUNTIES) if (c.southern) s.sym[c.id] += K(s, 'symTrain');
+    if (def.kind === 'train') {
+      const grange = modActive(s, 'symTrainX') ? s.mods.symTrainX.x : 1;
+      for (const c of COUNTIES) if (c.southern) s.sym[c.id] += K(s, 'symTrain') * grange;
+      if (modActive(s, 'strike')) for (const c of COUNTIES) s.sym[c.id] += s.mods.strike.x;
+    }
     if (killed) {
       s.sym[county] -= K(s, 'symKillLocal');
       for (const c of COUNTIES) s.sym[c.id] -= K(s, 'symKillAll');
@@ -238,6 +249,9 @@ export function runJob(s, plan, rng, events) {
     // The town learns.
     const t = s.targets[def.id];
     t.robbed += 1;
+    // What you took is gone until the new year refills the vault.
+    t.cash = Math.max(Math.round((def.cash[0] * 0.1) / 50) * 50, t.cash - take);
+    t.robbedYear = yearOf(s.t);
     // Express companies add guards; banks add guards and the town buys rifles.
     t.boostG = Math.min(2, t.boostG + 1);
     if (def.kind !== 'train') t.boostF = Math.min(2, t.boostF + 1);
@@ -246,7 +260,7 @@ export function runJob(s, plan, rng, events) {
     s.flags.northfieldDone = s.t;
     if (killed) for (const c of COUNTIES) s.sym[c.id] -= K(s, 'symKillAll');
   }
-  const hc = hideoutCounty(plan.hideout);
+  const hc = hideoutCounty(s, plan.hideout);
   s.heat[hc] = Math.min(100, s.heat[hc] + 10);
   for (const c of Object.keys(s.sym)) s.sym[c] = Math.max(0, Math.min(100, s.sym[c]));
 
@@ -268,6 +282,8 @@ export function runJob(s, plan, rng, events) {
     casualties, beats, headline, crew: plan.crew.map((c) => ({ ...c })),
   };
   s.lastJob = report;
+  // The men who came through unhurt learn (beats added after the report is built, so they print last).
+  learn(s, plan.crew, new Set(casualties.map((c) => c.id)), rng, beats);
   return report;
 }
 

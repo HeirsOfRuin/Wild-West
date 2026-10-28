@@ -56,7 +56,7 @@ export const TARGETS = [
   { id: 'liberty-stage', county: 'clay', kind: 'stage', name: 'Liberty to Kansas City stage',
     cash: [200, 1000], guard: 0, fight: 0 },
   { id: 'kc-bank', county: 'jackson', kind: 'bank', name: 'First National Bank, Kansas City',
-    cash: [6000, 16000], guard: 3, fight: 3 },
+    cash: [4000, 10000], guard: 3, fight: 3 },
   { id: 'blue-cut', county: 'jackson', kind: 'train', name: 'Chicago & Alton at Blue Cut',
     cash: [1500, 8000], guard: 1, fight: 0, from: 1873 },
   { id: 'richmond-bank', county: 'ray', kind: 'bank', name: 'Hughes & Mason Bank, Richmond',
@@ -72,7 +72,7 @@ export const TARGETS = [
   { id: 'winston', county: 'daviess', kind: 'train', name: 'Rock Island line at Winston',
     cash: [1000, 6000], guard: 1, fight: 0, from: 1873 },
   { id: 'stjoe-bank', county: 'buchanan', kind: 'bank', name: 'State Savings Bank, St. Joseph',
-    cash: [6000, 14000], guard: 3, fight: 3 },
+    cash: [4000, 10000], guard: 3, fight: 3 },
   { id: 'hannibal', county: 'buchanan', kind: 'train', name: 'Hannibal & St. Joseph express',
     cash: [2000, 9000], guard: 2, fight: 0, from: 1873 },
 ];

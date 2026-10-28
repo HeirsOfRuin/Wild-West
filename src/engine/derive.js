@@ -7,9 +7,10 @@
 // robberies taught it). The bot sees exactly what the player sees.
 
 import { TARGETS, NORTHFIELD, KINDS, COUNTIES } from '../data/world.data.js';
-import { K, yearOf, dateOf, intelValid, believedGuard, believedFight } from './state.js';
-import { targetDef, targetOpen, hideouts, hideoutCounty } from './job.js';
+import { K, yearOf, dateOf, intelValid, believedGuard, believedFight, cashOf, modActive } from './state.js';
+import { targetDef, targetOpen, hideouts, hideoutCounty, freshHorses } from './job.js';
 import { members, active, followers, mood, recruitOptions } from './gang.js';
+import { gearOptions, houseOptions, bribeOption, doctorOption, marryProblem } from './outfit.js';
 import { scoutProblem, letterProblem, lieLowOptions, coverOptions } from './season.js';
 import { informChance, recognitionChance, COVER_COUNTY } from './pressure.js';
 import { retireProblem, familyAlive } from './ending.js';
@@ -33,7 +34,10 @@ export function intel(s, id) {
     return { scouted: true, guard: [i.guard, i.guard], fight: [i.fight, i.fight], cash: [i.cash, i.cash] };
   }
   const g = believedGuard(def, t), f = believedFight(def, t);
-  return { scouted: false, guard: [clamp3(g - 1), clamp3(g + 1)], fight: [clamp3(f - 1), clamp3(f + 1)], cash: def.cash };
+  const emptied = t.robbedYear === yearOf(s.t);
+  const cash = emptied ? [Math.round(def.cash[0] * 0.1), Math.round(def.cash[1] * 0.4)] : def.cash;
+  return { scouted: false, guard: [clamp3(g - 1), clamp3(g + 1)], fight: [clamp3(f - 1), clamp3(f + 1)],
+    cash: cash.map((c) => cashOf(s, def, c)), note: emptied ? 'You robbed it this year. The vault will not be full again until the new year.' : undefined };
 }
 
 /** The targets on offer this season, with why the closed ones are closed. */
@@ -61,7 +65,7 @@ export function forecast(s, plan) {
   const info = intel(s, def.id);
   const heat = s.heat[def.county] ?? 0;
   const symFrom = s.sym[def.county] ?? 0;
-  const symTo = plan.hideout ? s.sym[hideoutCounty(plan.hideout)] ?? 0 : 0;
+  const symTo = plan.hideout ? s.sym[hideoutCounty(s, plan.hideout)] ?? 0 : 0;
   const cases = [];
   for (const guard of new Set(info.guard)) for (const fight of new Set(info.fight)) cases.push({ guard, fight });
   const one = ({ guard, fight }, cash) => {
@@ -90,7 +94,7 @@ export function forecast(s, plan) {
     // road, a quarter are hit again and most of those are lost.
     const behind = st.holders < st.holdersNeeded ? 0.5 : 0;
     const expWounded = st.wounded + per.reduce((a, p) => a + p.h * 0.7 * (1 - behind), 0);
-    const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: expWounded, far: !!def.far });
+    const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: expWounded, far: !!def.far, fresh: plan.hideout ? freshHorses(s, plan.hideout) : 0 });
     const take = cash * frac * 0.925 * (1 - 0.3 * pCatch);
     const roadLoss = (def.far ? 0.45 : 0.25) * 0.7;
     const leader = per.find((p) => p.id === 'jesse');
@@ -126,20 +130,27 @@ function bandRange([lo, hi]) {
 
 /** Everything the season screen needs, with every lock explained. */
 export function view(s) {
-  const where = s.where === 'farm' ? 'clay' : s.where;
   return {
     date: dateOf(s.t), year: yearOf(s.t), t: s.t,
     purse: s.purse, legend: Math.round(s.legend), reward: s.reward,
     pinkerton: s.pinkActive ? Math.round(s.pinkerton) : null,
     heat: Object.fromEntries(Object.entries(s.heat).map(([k, v]) => [k, Math.round(v)])),
     sym: Object.fromEntries(Object.entries(s.sym).map(([k, v]) => [k, Math.round(v)])),
-    safe: Object.fromEntries(Object.entries(s.sym).map(([k, v]) => [k, v >= K(s, 'safeSym')])),
+    safe: Object.fromEntries(Object.entries(s.sym).map(([k, v]) => [k, v >= (s.houses[k] ? K(s, 'houseSym') : K(s, 'safeSym'))])),
+    me: s.me, home: s.home, houses: { ...s.houses }, where: s.where,
+    married: s.married, marry: marryProblem(s), family: s.family.map((f) => ({ ...f })),
+    houseOptions: houseOptions(s),
+    bribe: Object.fromEntries(COUNTIES.map((c) => [c.id, bribeOption(s, c.id)])),
+    mods: {
+      panic: modActive(s, 'bankCash'), grange: modActive(s, 'symTrainX'), strike: modActive(s, 'strike'),
+    },
     cover: { ...s.cover, level: Math.round(s.cover.level) },
     retired: s.retired, outcome: s.outcome,
     gang: members(s).filter((m) => m.status === 'active').map((m) => ({
       id: m.id, name: m.name, short: m.short, leader: !!m.leader, gun: m.gun, nerve: m.nerve, horse: m.horse,
+      base: m.base, gear: { ...m.gear }, rel: m.rel, pitch: m.pitch, jobs: m.jobs || 0,
       traits: m.traits, kin: m.kin, mood: mood(m), pocket: m.pocket, wounded: m.wounded, suspected: m.suspected,
-      rode: m.rode,
+      rode: m.rode, outfit: gearOptions(s, m.id), doctor: doctorOption(s, m.id),
     })),
     gone: members(s).filter((m) => m.status !== 'active' && !m.leader).map((m) => ({ id: m.id, name: m.name, status: m.status })),
     recruits: recruitOptions(s),
@@ -152,6 +163,7 @@ export function view(s) {
     },
     risks: {
       inform: Object.fromEntries(COUNTIES.map((c) => [c.id, informChance(s, c.id)])),
+      informFarm: informChance(s, s.home, true),
       recognise: Object.fromEntries(['kc', 'stjoe', 'nashville'].map((p) => [p, recognitionChance(s, p)])),
     },
     lieLow: lieLowOptions(s),

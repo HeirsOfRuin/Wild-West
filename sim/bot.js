@@ -8,14 +8,21 @@ import { targetDef } from '../src/engine/job.js';
 import { yearOf } from '../src/engine/state.js';
 import { members } from '../src/engine/gang.js';
 
+// outfit: buys horses and guns; houses: buys safe houses; bribes: pays sheriffs.
+// Each defaults on for the reference policy; the "*-plain" variants switch them
+// off to measure what the money buys.
+const SPEND = { outfit: true, houses: true, bribes: true };
 export const POLICIES = {
-  careful: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true },
-  noscout: { risk: 1, scout: false, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true },
-  quiet: { risk: 1, scout: true, approach: 'quiet', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true },
-  bold: { risk: 1, scout: true, approach: 'bold', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true },
+  careful: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
+  noscout: { risk: 1, scout: false, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
+  quiet: { risk: 1, scout: true, approach: 'quiet', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
+  bold: { risk: 1, scout: true, approach: 'bold', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
   raider: { risk: 0.2, scout: false, approach: 'bold', jobEvery: 0, retireAt: 9999, retirePurse: 1e9, letters: true, give: false, biggest: true },
-  earlyout: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1874, retirePurse: 6000, letters: true, give: true },
-  stayer: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 1e9, letters: true, give: true },
+  earlyout: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1874, retirePurse: 6000, letters: true, give: true, ...SPEND },
+  stayer: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 1e9, letters: true, give: true, ...SPEND },
+  // The exploit hunt: marry at once, rob until $6,000, then quit (from 1867).
+  quickout: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 6000, windFrom: 1867, marryAt: 1866, letters: false, give: true, ...SPEND },
+  plain: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, outfit: false, houses: false, bribes: false },
   hermit: { risk: 1, scout: false, approach: 'any', jobEvery: 99, never: true, retireAt: 9999, retirePurse: 1e9, letters: false, give: false },
 };
 
@@ -24,7 +31,8 @@ function candidatePlans(s, v, target, pol) {
   const avail = v.gang.filter((m) => m.wounded === 0 || m.leader);
   const hides = hideouts(s, targetDef(target)).filter((h) => !h.lock);
   if (!hides.length) return [];
-  const hide = hides.reduce((a, b) => ((s.sym[b.id === 'farm' ? 'clay' : b.id] ?? 0) > (s.sym[a.id === 'farm' ? 'clay' : a.id] ?? 0) ? b : a));
+  const hs = (h) => (s.sym[h.id === 'farm' ? s.home : h.id] ?? 0) + (h.own ? 20 : 0);
+  const hide = hides.reduce((a, b) => (hs(b) > hs(a) ? b : a));
   const plans = [];
   const approaches = pol.approach === 'any' ? ['quiet', 'bold'] : [pol.approach];
   for (let n = 3; n <= Math.min(avail.length, 7); n++) {
@@ -76,8 +84,11 @@ export function step(s, polName = 'careful') {
 
   if (s.retired) return { type: 'wait' };
 
+  // A wife: somebody to quit for.
+  if (!v.married && !v.marry && y >= (pol.marryAt ?? 1868) && s.purse >= 800) return { type: 'marry' };
+
   // Winding down: dissolve, live as Mr. Howard, retire.
-  const windDown = y >= pol.retireAt || (y >= 1873 && s.purse >= pol.retirePurse);
+  const windDown = y >= pol.retireAt || (y >= (pol.windFrom ?? 1873) && s.purse >= pol.retirePurse);
   if (windDown) {
     const f = v.gang.find((m) => !m.leader);
     if (f) return { type: 'dismiss', id: f.id, stake: s.purse >= 300 + 5000 };
@@ -90,8 +101,29 @@ export function step(s, polName = 'careful') {
   if (pol.letters && !v.actions.letter && s.lastJob && !s.lastJob.cashierKilled && !s.lastJob.bystanders) return { type: 'letter' };
   const sus = v.gang.find((m) => m.suspected && !m.leader);
   if (sus) return { type: 'dismiss', id: sus.id };
-  const rec = v.recruits.find((r) => !r.lock);
-  if (rec && v.gang.length < 6 && !windDown) return { type: 'recruit', id: rec.id };
+  const rec = v.recruits.filter((r) => !r.lock).sort((a, b) => (b.gun + b.nerve + b.horse) - (a.gun + a.nerve + a.horse))[0];
+  if (rec && v.gang.length < 7 && !windDown) return { type: 'recruit', id: rec.id };
+  // Spending: a reserve first, then the outfit, then houses, then sheriffs.
+  if (!windDown) {
+    const reserve = 1200;
+    const hurt = v.gang.find((m) => !m.doctor.lock);
+    if (hurt && s.purse > 600) return { type: 'doctor', id: hurt.id };
+    if (pol.outfit) {
+      for (const m of [...v.gang].sort((a, b) => (b.leader ? 1 : 0) - (a.leader ? 1 : 0))) {
+        const o = m.outfit.find((x) => !x.done && !x.lock && s.purse - x.cost > reserve);
+        if (o) return { type: 'buy', id: m.id, item: o.item };
+      }
+    }
+    if (pol.houses) {
+      const h = v.houseOptions.filter((o) => !o.done && !o.lock && o.county !== s.home && s.purse - o.cost > reserve + 800)
+        .sort((a, b) => a.level - b.level || s.sym[b.county] - s.sym[a.county])[0];
+      if (h) return { type: 'house', county: h.county };
+    }
+    if (pol.bribes) {
+      const b = Object.values(v.bribe).filter((o) => !o.lock && s.heat[o.county] >= 40 && s.purse - o.cost > reserve).sort((a, b) => s.heat[b.county] - s.heat[a.county])[0];
+      if (b) return { type: 'bribe', county: b.county };
+    }
+  }
   const sullen = v.gang.find((m) => !m.leader && m.mood.word === 'Sullen');
   if (sullen && s.purse > 1200 && s.gang.find((g) => g.id === sullen.id).bonusT !== s.t) return { type: 'bonus', id: sullen.id, amount: 200 };
 
@@ -108,15 +140,16 @@ export function step(s, polName = 'careful') {
 
   // Lie low where it is safest.
   const opts = v.lieLow.filter((o) => !o.lock);
-  const score = (o) => (s.sym[o.county] - s.heat[o.county] - 100 * v.risks.inform[o.county]) - (o.id === 'farm' && s.pinkActive ? s.pinkerton / 2 : 0);
+  const risk = (o) => (o.id === 'farm' ? v.risks.informFarm : v.risks.inform[o.county]);
+  const score = (o) => (s.sym[o.county] - s.heat[o.county] - 100 * risk(o)) - (o.id === 'farm' && s.pinkActive ? s.pinkerton / 2 : 0) + (o.house ? 15 : 0);
   const at = opts.reduce((a, b) => (score(b) > score(a) ? b : a));
   const give = pol.give && s.purse > 900 && s.sym[at.county] < 60 ? 200 : 0;
   return { type: 'lielow', at: at.id, give };
 }
 
 /** Play a whole game. Returns the final state. */
-export function playGame(seed, polName = 'careful', tune = {}, newGame) {
-  let s = newGame(seed, tune);
+export function playGame(seed, polName = 'careful', tune = {}, newGame, creation) {
+  let s = creation ? newGame(seed, tune, creation) : newGame(seed, tune);
   let guard = 0;
   while (!s.outcome) {
     const a = step(s, polName);

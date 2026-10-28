@@ -23,6 +23,8 @@ export const metrics = (s) => ({
   jobs: s.stats.jobs,
   take: s.stats.take,
   purse: s.purse,
+  spent: s.stats.spent,
+  gangPeak: Math.max(...s.hist.map((h) => h.gang)),
   legendPeak: Math.max(...s.hist.map((h) => h.legend)),
   gangDead: s.dead.length,
   diedOnJob: s.outcome.cause === 'job',

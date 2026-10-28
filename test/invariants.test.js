@@ -5,7 +5,6 @@ import { newGame, serialize, deserialize, toCode, fromCode, lastTurn, SAVE_VERSI
 import { act } from '../src/engine/season.js';
 import { ledgerSum } from '../src/engine/money.js';
 import { step } from '../sim/bot.js';
-import { defOf } from '../src/engine/gang.js';
 
 function play(seed, pol, each) {
   let s = newGame(seed);
@@ -32,6 +31,20 @@ test('the purse always equals the ledger, and never goes negative', () => {
   }
 });
 
+test('no number in the state is ever NaN, and every county key is a county', () => {
+  const bad = (o, path = '') => {
+    if (typeof o === 'number') return Number.isFinite(o) ? null : path;
+    if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { const b = bad(v, `${path}.${k}`); if (b) return b; }
+    return null;
+  };
+  for (const pol of POLS) for (const seed of SEEDS.slice(0, 3)) {
+    play(seed, pol, (b, a, s) => {
+      assert.equal(bad(s), null, `${pol} seed ${seed} after ${a.type}: ${bad(s)}`);
+      assert.deepEqual(Object.keys(s.heat).sort(), Object.keys(s.sym).sort(), `${pol} seed ${seed}: stray county key after ${a.type}`);
+    });
+  }
+});
+
 test('the same seed and choices give the same game, byte for byte', () => {
   for (const seed of [11, 12]) assert.equal(serialize(play(seed, 'careful')), serialize(play(seed, 'careful')));
 });
@@ -46,7 +59,7 @@ test('every game ends, and no later than the last season', () => {
 
 test('free actions leave the season open; season actions close it', () => {
   play(3, 'careful', (b, a, s) => {
-    const free = ['scout', 'recruit', 'dismiss', 'kill', 'bonus', 'letter'].includes(a.type);
+    const free = ['scout', 'recruit', 'dismiss', 'kill', 'bonus', 'letter', 'buy', 'house', 'bribe', 'doctor', 'marry'].includes(a.type);
     if (free) assert.equal(s.t, b.t, `${a.type} moved the clock`);
     else if (!s.outcome) assert.equal(s.t, b.t + 1, `${a.type} did not move the clock`);
   });
@@ -61,16 +74,16 @@ test('dead and captured men stay gone: they cannot ride again', () => {
   }
   // And the engine refuses it outright.
   let s = newGame(1);
-  s.gang.find((g) => g.id === 'cole').status = 'dead';
+  s.gang.find((g) => g.id === 'c-cousin').status = 'dead';
   assert.throws(() => act(s, { type: 'job', target: 'liberty-bank', approach: 'quiet', hideout: 'farm', cut: 'even',
-    crew: [{ id: 'jesse', role: 'horses' }, { id: 'cole', role: 'inside' }] }), /not riding/);
+    crew: [{ id: 'me', role: 'horses' }, { id: 'c-cousin', role: 'inside' }] }), /not riding/);
 });
 
 test('your own kin never sell you', () => {
   for (const pol of ['stayer', 'hermit']) for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
     const s = play(seed, pol);
-    for (const g of s.gang) if (defOf(g.id).kin === 'james' && !defOf(g.id).leader) assert.ok(g.status !== 'turned' && g.stage === 0, `${g.id} turned`);
-    if (s.outcome.by) assert.notEqual(defOf(s.outcome.by).kin, 'james');
+    for (const g of s.gang) if (g.kin === 'family' && !g.leader) assert.ok(g.status !== 'turned' && g.stage === 0, `${g.id} turned`);
+    if (s.outcome.by) assert.notEqual(s.gang.find((g) => g.id === s.outcome.by).kin, 'family');
   }
 });
 
@@ -86,6 +99,12 @@ test('a save survives the round trip, as JSON and as a save code', () => {
 test('locked choices refuse with a reason, not silently', () => {
   const s = newGame(1);
   assert.throws(() => act(s, { type: 'retire' }), /nobody to quit for/);
+  const broke = { ...s, purse: 0 };
+  assert.throws(() => act(broke, { type: 'buy', id: 'me', item: 'gun' }), /Costs/);
+  assert.throws(() => act(broke, { type: 'house', county: 'clay' }), /Costs/);
+  assert.throws(() => act(broke, { type: 'marry' }), /costs/);
+  assert.throws(() => act(s, { type: 'bribe', county: 'clay' }), /No posse/);
+  assert.throws(() => act(s, { type: 'doctor', id: 'me' }), /not hurt/);
   assert.throws(() => act(s, { type: 'letter' }), /newspaper/);
   assert.throws(() => act(s, { type: 'job', target: 'hannibal', crew: [], approach: 'bold', hideout: 'farm' }), /train/);
 });

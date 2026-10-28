@@ -1,9 +1,13 @@
 # Dead or Alive
 
 Lead an outlaw gang in western Missouri, 1866-1882, modelled on the James-Younger
-gang. Rob banks, trains and stagecoaches while the counties around you decide
-whether to hide you or sell you, and the men who ride with you decide the same.
-The question is how long you last and who betrays you.
+gang. Make your outlaw (name, background, home county, a strength), pick two to
+four companions from family and friends, and build from there: recruit men who
+come looking for you (the Youngers and the Fords among them, in their years),
+buy better horses and guns, keep safe houses, pay off sheriffs. Rob banks, trains
+and stagecoaches while the counties around you decide whether to hide you or sell
+you, and the men who ride with you decide the same. The question is how long you
+last and who betrays you.
 
 Turn-based, one season per turn, phone-first, works offline, no accounts.
 
@@ -35,7 +39,8 @@ src/ui/       the page; computes nothing
 sim/          bots, batch runner, kill gate, inert check, tracer
 test/         invariants
 tools/        bundler, icon generator, smoke and bundle checks
-docs/         SPEC.md (what it is), DESIGN.md (how it is built, what was measured)
+docs/         SPEC.md (what it is), DESIGN.md (how it is built, what was measured),
+              FRAME-SANDBOX.md (the sandbox round: the request and the design)
 ```
 
 ## Rules the code is organised around
@@ -62,6 +67,9 @@ docs/         SPEC.md (what it is), DESIGN.md (how it is built, what was measure
   Miller and Bill Chadwell killed in the street, the Youngers taken at Madelia,
   $26.70 taken).
 - The death of Jesse James, 3 April 1882, St. Joseph, shot by Bob Ford.
+- State news: Parrish, Jones and Christensen, *Missouri: The Heart of the Nation*
+  (the test oath, the Hannibal Bridge, the Cass County bond killings of 1872, the
+  Panic of 1873, the Grange, the 1875 constitution, the 1877 strike).
 
 Takes and sympathy values are design readings of these accounts, not records.
 Uncertain details are marked "traditional" or kept out.
