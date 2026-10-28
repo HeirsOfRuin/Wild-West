@@ -182,6 +182,7 @@ Final measurements, 200 seeds per policy, same seeds (`node sim/run.js 200`):
 
 | Date | Decision |
 |---|---|
+| 2026-10-28 | **Pace and incidents** (`docs/FRAME-PACE.md`). The author: "increase the speed of time or something, it dragged trying to get to 73. And the 15 months of quiet life is boring." Lie low for a year in one tap; the quiet years a year at a time with a question most years (14.4 taps to 6.0); 19 incidents and 4 one-season tip jobs. Win rate 18.0% (200 seeds). |
 | 2026-10-28 | **Win target 15-20%; realistic end-game purchases.** The author: "I'd like a win rate around 15-20%" and "bigger purchases that help the retirement end game, but keep it realistic". Farm, business, lawyer, hush money; quiet years 8 -> 10. Measured 20.0% (200 seeds, SE 2.8); first cut was 30.7%. |
 | 2026-10-28 | **Sandbox.** The author: "more sandbox, where you make your character, start with 2 or 3 other family members or friends, then build up your gang and upgrade". Built as framed; the 1874 retirement lock became marriage. Careful retirement fell to 9-11% before the end-game round. |
 | 2026-10-28 | **First playable built from the concept.** The author's brief: "Fights are rare, fast and deadly. Planning matters more than shooting." and "'Win': retire quietly ... This is rare and hard." Built to it; reference bot retires 22% (100 seeds), raiders never. The target win rate is the author's call (other games: 5-7% crowned, 25% centennial). |

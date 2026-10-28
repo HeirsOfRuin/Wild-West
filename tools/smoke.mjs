@@ -110,11 +110,21 @@ await page.click('[data-act="back"]');
 
 // Play on: alternate lying low and jobs, by clicking, until the game ends or 24 seasons pass.
 const t0 = await page.evaluate(() => globalThis.__outlaw.state.t);
+let answered = 0, years = 0;
 for (let i = 0; i < 24; i++) {
   if (await has('[data-act="new"]')) break; // the end screen
+  if (await has('.card.incident')) {
+    if (!answered) await look('incident');
+    await page.locator('[data-act="answer"]:not([disabled])').first().click();
+    answered++;
+    if (await has('[data-act="done"]')) await page.click('[data-act="done"]');
+    continue;
+  }
   if (i % 2 === 0) {
     await page.click('[data-screen="lielow"]');
-    await page.locator('[data-act="lielow"]').click();
+    const n = i % 4 === 0 ? 4 : 1;
+    if (n === 4) years++;
+    await page.locator(`[data-act="lielow"][data-n="${n}"]`).click();
     if (await has('[data-act="done"]')) await page.click('[data-act="done"]');
   } else {
     await page.click('[data-screen="job"]');
@@ -129,7 +139,7 @@ for (let i = 0; i < 24; i++) {
 }
 const t1 = await page.evaluate(() => globalThis.__outlaw.state?.t ?? -1);
 const over = await has('[data-act="new"]');
-check('seasons advanced by clicking', t1 > t0 || over, `t ${t0} -> ${t1}${over ? ' (game over)' : ''}`);
+check('seasons advanced by clicking', t1 > t0 || over, `t ${t0} -> ${t1}${over ? ' (game over)' : ''}, ${answered} questions answered, ${years} year-long stretches`);
 await look('later');
 
 // The save survives a reload.

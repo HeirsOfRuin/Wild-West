@@ -161,6 +161,12 @@ export function seasonLoyalty(s, ctx, rng) {
     if (ctx.underCover && m.kin !== 'family') nudge(s, m.id, -K(s, 'coverAbsence'));
     if (s.legend >= K(s, 'prideLegend')) nudge(s, m.id, 1);
     if (g.wounded > 0) g.wounded -= 1;
+    if (g.leaveT !== undefined && s.t >= g.leaveT) {
+      g.status = 'gone';
+      g.leftT = s.t;
+      s.log.push({ t: s.t, kind: 'gang', text: `${g.name} keeps his word to his girl and goes home to marry her. He leaves on good terms.` });
+      continue;
+    }
     g.noise = Math.round((rng.next() * 2 - 1) * readNoise(member(s, m.id))) || 0; // never -0: saves must round-trip exactly
   }
   const L = raw(s, 'me');

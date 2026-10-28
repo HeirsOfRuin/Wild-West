@@ -51,7 +51,8 @@ export function recognitionChance(s, place) {
   if (!place) return 0;
   const inState = place !== 'nashville';
   const farm = place === 'nashville' && s.assets?.farm ? K(s, 'farmRecognise') : 1;
-  return clamp((s.legend / 100) * 0.22 * (1 - s.cover.level / 120) * (inState ? 1.6 : 1) * farm, 0.005, 0.5);
+  const exposed = s.flags?.exposedT === s.t ? 2 : 1; // you stood where people could see you
+  return clamp((s.legend / 100) * 0.22 * (1 - s.cover.level / 120) * (inState ? 1.6 : 1) * farm * exposed, 0.005, 0.5);
 }
 
 /**

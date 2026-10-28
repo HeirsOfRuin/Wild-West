@@ -86,4 +86,9 @@ export const NORTHFIELD = {
   far: true,
 };
 
+// Every target that keeps a state entry (rolled each year). Tip targets are
+// defined with the incidents that open them.
+import { TIP_TARGETS } from './incidents.data.js';
+export const ALL_TARGETS = [...TARGETS, ...TIP_TARGETS];
+
 export const CASH_BAND = (lo, hi) => `$${lo.toLocaleString('en-US')}–$${hi.toLocaleString('en-US')}`;

@@ -51,6 +51,9 @@ export const CONFIG = {
   hushCost: 250, // money for a man who has gone home
   hushLoyalty: 25,
   childChance: 0.3, // each spring after marrying, up to three children
+  incidentRiding: 0.3, // chance something asks a question in a season while riding
+  incidentRetired: 0.35, // ...and in a season of the quiet years
+  incidentGap: [2, 3], // seasons at least between questions: riding, retired
   recruitOffers: 2, // most new men looking for you in a season
   offerLife: 2, // seasons an offer stands
 

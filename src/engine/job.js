@@ -2,7 +2,7 @@
 // ride to the hideout. The report the player reads is this resolver's own log,
 // never a retelling.
 
-import { TARGETS, NORTHFIELD, KINDS, LINKS, COUNTIES } from '../data/world.data.js';
+import { ALL_TARGETS, NORTHFIELD, KINDS, LINKS, COUNTIES } from '../data/world.data.js';
 import { K, yearOf, trueGuard, trueFight, intelValid, cashOf, modActive } from './state.js';
 import { pay } from './money.js';
 import { members, nudge, rawMember, learn } from './gang.js';
@@ -11,7 +11,7 @@ import {
   townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, legendGain,
 } from './odds.js';
 
-export const targetDef = (id) => (id === NORTHFIELD.id ? NORTHFIELD : TARGETS.find((t) => t.id === id));
+export const targetDef = (id) => (id === NORTHFIELD.id ? NORTHFIELD : ALL_TARGETS.find((t) => t.id === id));
 export const adjacent = (a, b) => LINKS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 export const countyName = (id) => COUNTIES.find((c) => c.id === id)?.name ?? 'Minnesota';
 
@@ -41,6 +41,7 @@ export const freshHorses = (s, hideout) => (hideout !== 'farm' && (s.houses[hide
 
 export function targetOpen(s, def) {
   if (def.far) return s.flags.northfieldOffer === s.t ? null : 'Not on offer.';
+  if (def.tip) return s.flags.tips?.[def.id] === s.t ? null : 'Only on a tip, and only that season.';
   if (def.from && yearOf(s.t) < def.from) return `Nobody has stopped a train in Missouri yet (opens ${def.from}).`;
   return null;
 }
@@ -234,8 +235,12 @@ export function runJob(s, plan, rng, events) {
   // The world's answer.
   const isHome = county === s.home;
   if (!def.far) {
-    if (def.kind === 'bank') s.sym[county] -= isHome ? K(s, 'symHomeBank') : K(s, 'symBank');
-    if (def.kind === 'stage') s.sym[county] -= K(s, 'symStage');
+    if (def.tip) {
+      // Tip jobs carry their own politics: the tax man and the army are fair game in the South.
+      s.sym[county] += def.symLocal;
+      for (const c of COUNTIES) if (c.southern) s.sym[c.id] += def.symSouth;
+    } else if (def.kind === 'bank') s.sym[county] -= isHome ? K(s, 'symHomeBank') : K(s, 'symBank');
+    if (def.kind === 'stage' && !def.tip) s.sym[county] -= K(s, 'symStage');
     if (def.kind === 'train') {
       const grange = modActive(s, 'symTrainX') ? s.mods.symTrainX.x : 1;
       for (const c of COUNTIES) if (c.southern) s.sym[c.id] += K(s, 'symTrain') * grange;
@@ -266,7 +271,7 @@ export function runJob(s, plan, rng, events) {
   for (const c of Object.keys(s.sym)) s.sym[c] = Math.max(0, Math.min(100, s.sym[c]));
 
   s.legend = Math.max(0, Math.min(100, s.legend + legendGain({ approach: plan.approach, loot, killed, far: !!def.far })));
-  s.reward += KINDS[def.kind].reward + (killed ? K(s, 'rewardKill') : 0) + (def.far ? 1000 : 0);
+  s.reward += (def.tip ? def.reward : KINDS[def.kind].reward) + (killed ? K(s, 'rewardKill') : 0) + (def.far ? 1000 : 0);
   if (def.kind === 'train' || def.far) s.pinkActive = true;
   if (s.pinkActive) s.pinkerton = Math.min(100, s.pinkerton + KINDS[def.kind].pink + (def.far ? 15 : 0));
 

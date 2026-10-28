@@ -6,7 +6,8 @@
 // range around what the gang knows (the town's reputation and what your own
 // robberies taught it). The bot sees exactly what the player sees.
 
-import { TARGETS, NORTHFIELD, KINDS, COUNTIES } from '../data/world.data.js';
+import { ALL_TARGETS, NORTHFIELD, KINDS, COUNTIES } from '../data/world.data.js';
+import { incidentView } from './incidents.js';
 import { K, yearOf, dateOf, intelValid, believedGuard, believedFight, cashOf, modActive } from './state.js';
 import { targetDef, targetOpen, hideouts, hideoutCounty, freshHorses } from './job.js';
 import { members, active, followers, mood, recruitOptions } from './gang.js';
@@ -42,10 +43,10 @@ export function intel(s, id) {
 
 /** The targets on offer this season, with why the closed ones are closed. */
 export function targetList(s) {
-  const defs = [...TARGETS];
+  const defs = ALL_TARGETS.filter((d) => !d.tip || !targetOpen(s, d));
   if (s.flags.northfieldOffer === s.t) defs.push(NORTHFIELD);
   return defs.map((def) => ({
-    id: def.id, name: def.name, kind: def.kind, kindName: KINDS[def.kind].name, county: def.county,
+    id: def.id, name: def.name, kind: def.kind, kindName: def.kindName || KINDS[def.kind].name, county: def.county, tip: !!def.tip,
     countyName: COUNTIES.find((c) => c.id === def.county)?.name ?? 'Minnesota',
     far: !!def.far, lock: targetOpen(s, def), robbed: def.far ? 0 : s.targets[def.id].robbed,
     sym: s.sym[def.county] ?? 0, heat: s.heat[def.county] ?? 0,
@@ -140,6 +141,7 @@ export function view(s) {
     me: s.me, home: s.home, houses: { ...s.houses }, where: s.where,
     married: s.married, marry: marryProblem(s), family: s.family.map((f) => ({ ...f })),
     houseOptions: houseOptions(s),
+    incident: incidentView(s),
     bribe: Object.fromEntries(COUNTIES.map((c) => [c.id, bribeOption(s, c.id)])),
     mods: {
       panic: modActive(s, 'bankCash'), grange: modActive(s, 'symTrainX'), strike: modActive(s, 'strike'),

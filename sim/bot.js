@@ -83,6 +83,11 @@ export function step(s, polName = 'careful') {
   const v = view(s);
   const y = yearOf(s.t);
 
+  // Something needs an answer: the most preferred choice the purse allows.
+  if (v.incident) {
+    const o = v.incident.options.filter((x) => !x.lock).sort((a, b) => b.bot - a.bot)[0];
+    return { type: 'answer', choice: o.id };
+  }
   if (s.retired) {
     const sore = pol.endgame && v.gone.find((g) => !g.hush.lock && s.gang.find((x) => x.id === g.id).loyalty < 50 && s.purse >= 2000);
     return sore ? { type: 'hush', id: sore.id } : { type: 'wait' };

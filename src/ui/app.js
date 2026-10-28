@@ -68,7 +68,7 @@ function bar(v) {
 function tabs() {
   const t = (id, label, dot) => `<button data-tab="${id}" aria-current="${U.tab === id && !U.screen}">${label}${dot ? '<span class="dot"></span>' : ''}</button>`;
   const sus = S && view(S).gang.some((m) => m.suspected);
-  return `<nav class="tabs">${t('season', 'Season')}${t('gang', 'Gang', sus)}${t('map', 'Map')}${t('news', 'News')}</nav>`;
+  return `<nav class="tabs">${t('season', 'Season', !!S?.incident)}${t('gang', 'Gang', sus)}${t('map', 'Map')}${t('news', 'News')}</nav>`;
 }
 
 function events(list) {
@@ -154,17 +154,26 @@ function seasonTab(v) {
   if (v.outcome) return endScreen(v);
   const parts = [];
   if (S.report && U.screen === 'result') {
-    parts.push(`<h2>${esc(dateOf(S.report.t))}</h2>${paper(S.report)}<button class="btn block" data-act="done">On to ${esc(v.date)}</button>`);
+    const span = S.report.seasons > 1 ? `${dateOf(S.report.t)} to ${dateOf(S.report.t + S.report.seasons - 1)}` : dateOf(S.report.t);
+    parts.push(`<h2>${esc(span)}</h2>${S.report.stoppedEarly ? '<p class="small">Stopped early: something needs your attention.</p>' : ''}${paper(S.report)}<button class="btn block" data-act="done">On to ${esc(v.date)}</button>`);
     return parts.join('');
   }
-  if (S.report) parts.push(`<details><summary>Last season: ${esc(dateOf(S.report.t))}</summary>${paper(S.report)}</details>`);
+  if (S.report) parts.push(`<details><summary>${S.report.seasons > 1 ? `Last stretch: ${esc(dateOf(S.report.t))} to ${esc(dateOf(S.report.t + S.report.seasons - 1))}` : `Last season: ${esc(dateOf(S.report.t))}`}</summary>${paper(S.report)}</details>`);
   if (S.stateLine?.t === S.t) parts.push(`<div class="statebox"><span class="t">The State · ${esc(v.date)}</span>${esc(S.stateLine.text)}</div>`);
+  if (v.incident) {
+    const inc = v.incident;
+    parts.push(`<div class="card incident"><span class="t">Before anything else</span><h3>${esc(inc.title)}</h3><p>${esc(inc.text)}</p>
+      ${inc.options.map((o) => `<button class="choice" data-act="answer" data-v="${o.id}" ${o.lock ? 'disabled' : ''}><b>${esc(o.label)}</b>
+        <small>${esc(o.stakes.join(' · ') || 'nothing changes')}${o.lock ? ` · ${esc(o.lock)}` : ''}</small></button>`).join('')}</div>`);
+    return parts.join('');
+  }
   parts.push(`<h2>${v.date}: what will you do?</h2>`);
   if (v.retired) {
     const left = retireNeeded(S) - (S.t - v.retired.since);
     parts.push(`<div class="card"><h3>Mr. Howard's quiet life</h3>
       <p>${left} more quiet season${left === 1 ? '' : 's'} and the world forgets you. It costs ${$(K(S, 'retireCost'))} a season. Old friends who know where you live are the danger.</p>
-      <div class="btns"><button class="btn" data-act="wait">Another quiet season</button>
+      <div class="btns"><button class="btn" data-act="wait" data-n="4">Live the next year</button>
+      <button class="btn secondary" data-act="wait" data-n="1">One season</button>
       <button class="btn secondary" data-act="rideagain">Dig up the guns</button></div></div>`);
     return parts.join('');
   }
@@ -271,7 +280,9 @@ function lieLowScreen(v) {
     <div class="card"><h3>Give money away</h3>
       <p class="small">A widow's mortgage, a church roof. +1 sympathy for every ${$(K(S, 'giveScale'))} where you hide, halved each time in the same year.</p>
       <div class="seg">${gives.map((g) => `<button data-act="give" data-v="${g}" aria-pressed="${U.give === g}" ${g > v.purse ? 'disabled' : ''}>${g ? $(g) : 'Nothing'}</button>`).join('')}</div>
-      <button class="btn block" data-act="lielow" data-v="${sel}">Lie low for the season</button></div>`;
+      <div class="btns"><button class="btn" data-act="lielow" data-v="${sel}" data-n="1">For the season</button>
+      <button class="btn secondary" data-act="lielow" data-v="${sel}" data-n="4">For a year</button></div>
+      <p class="small">A year stops early if anything happens: a question, a warning, a raid, a known man, a tip. Money is given away only in the first season.</p></div>`;
 }
 
 function coverScreen(v) {
@@ -492,10 +503,11 @@ app.addEventListener('click', (ev) => {
     }
     case 'hidepick': U.hide = d.v; break;
     case 'give': U.give = Number(d.v); break;
-    case 'lielow': return doAct({ type: 'lielow', at: d.v, give: U.give });
+    case 'lielow': return doAct({ type: 'lielow', at: d.v, give: U.give, seasons: Number(d.n || 1) });
+    case 'answer': return doAct({ type: 'answer', choice: d.v });
     case 'cover': return doAct({ type: 'cover', place: d.v });
     case 'retire': return doAct({ type: 'retire' });
-    case 'wait': return doAct({ type: 'wait' });
+    case 'wait': return doAct({ type: 'wait', seasons: Number(d.n || 1) });
     case 'rideagain': return doAct({ type: 'rideagain' });
     case 'letter': return doAct({ type: 'letter' });
     case 'bonus': return doAct({ type: 'bonus', id: d.id, amount: 100 });

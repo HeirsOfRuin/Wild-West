@@ -14,9 +14,10 @@
 //   9. history and the state news; children; new men come looking
 // One record comes out: s.report, which the season screen shows.
 
-import { COUNTIES, TARGETS, NORTHFIELD } from '../data/world.data.js';
+import { COUNTIES, ALL_TARGETS, NORTHFIELD } from '../data/world.data.js';
 import { CONFIG } from '../data/config.data.js';
-import { K, yearOf, seasonOf, dateOf, lastTurn, rollTarget, cashOf } from './state.js';
+import { K, yearOf, seasonOf, dateOf, lastTurn, rollTarget, cashOf, readTarget } from './state.js';
+import { rollIncident, answer } from './incidents.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
 import { runJob, targetDef, targetOpen } from './job.js';
@@ -46,9 +47,11 @@ export function act(s0, a) {
     case 'doctor': doctor(s, a.id); return s;
     case 'marry': marry(s); return s;
     case 'asset': buyAsset(s, a.id); return s;
+    case 'answer': answer(s, a.choice, streamFor(s.seed, s.t, `answer:${s.incident?.id}`)); return s;
     case 'hush': hush(s, a.id); return s;
     case 'job': case 'lielow': case 'cover': case 'retire': case 'wait': case 'rideagain':
-      return seasonAction(s, a);
+      if (s.incident) throw new Error('Something needs an answer first (top of the Season screen).');
+      return (a.seasons || 1) > 1 ? stretch(s, a) : seasonAction(s, a);
     default: throw new Error(`Unknown action: ${a.type}`);
   }
 }
@@ -75,9 +78,7 @@ function scout(s, id) {
   if (def.far) {
     s.intel[id] = { t: s.t, guard: def.guard, fight: def.fight, cash: s.flags.northfieldCash };
   } else {
-    const tg = s.targets[id];
-    s.intel[id] = { t: s.t, guard: Math.max(0, Math.min(3, def.guard + tg.boostG + tg.rollG)),
-      fight: Math.max(0, Math.min(3, def.fight + tg.boostF + tg.rollF)), cash: cashOf(s, def, tg.cash) };
+    s.intel[id] = { t: s.t, ...readTarget(s, def) };
     s.heat[def.county] = Math.min(100, s.heat[def.county] + K(s, 'scoutHeat'));
   }
 }
@@ -298,6 +299,7 @@ function seasonAction(s, a) {
   stateNews(s, hr);
   family(s, hr);
   newMen(s, streamFor(s.seed, s.t, 'recruits'));
+  if (!a.holdQuestions) rollIncident(s, streamFor(s.seed, s.t, 'incident'));
   return s;
 }
 
@@ -309,8 +311,40 @@ export function baseline(s, c) {
   return clamp(c.base - (c.southern ? fade : fade / 2) + (c.southern ? s.edwards : 0) + myth, 0, 100);
 }
 
+// ---- a stretch of quiet seasons in one go ----------------------------------------
+
+/**
+ * Lie low (or live retired) for up to a.seasons seasons, stopping after any
+ * season in which something happens that a player would want to stop for.
+ * One report covers the stretch.
+ */
+function stretch(s, a) {
+  const want = Math.min(4, a.seasons);
+  const from = s.t;
+  const all = [];
+  let ran = 0;
+  while (ran < want) {
+    const known = s.offers.filter((o) => o.known).length;
+    // Questions are held until the stretch ends, then come as one.
+    s = seasonAction(s, { ...a, seasons: 1, give: ran === 0 ? a.give : 0, holdQuestions: true });
+    ran += 1;
+    const r = s.report;
+    all.push(...r.events.map((e) => ({ ...e, title: e.title || dateOf(r.t) })));
+    if (r.state) all.push({ kind: 'state', title: `The State · ${dateOf(r.t)}`, text: r.state.text });
+    const stop = s.outcome || s.incident || r.events.some((e) => e.kind === 'bad' || e.kind === 'warn')
+      || s.offers.filter((o) => o.known).length > known || s.flags.northfieldOffer === s.t
+      || (s.stateLine?.t === s.t && /\(/.test(s.stateLine.text)) || (a.type === 'lielow' && lieLowOptions(s).find((o) => o.id === a.at)?.lock)
+      || (a.type === 'wait' && !s.retired);
+    if (stop) break;
+  }
+  if (!s.outcome) rollIncident(s, streamFor(s.seed, s.t, 'incident'), ran);
+  s.report = { ...s.report, t: from, title: `${a.type === 'wait' ? 'The quiet life' : 'Lying low'}: ${dateOf(from)}${ran > 1 ? ` to ${dateOf(from + ran - 1)}` : ''}`,
+    events: all, seasons: ran, stoppedEarly: ran < want && !s.outcome };
+  return s;
+}
+
 function newYear(s) {
-  for (const def of TARGETS) s.targets[def.id] = rollTarget(s.seed, s.t, def, s.targets[def.id]);
+  for (const def of ALL_TARGETS) s.targets[def.id] = rollTarget(s.seed, s.t, def, s.targets[def.id]);
   for (const c of COUNTIES) s.given[c.id] = Math.floor(s.given[c.id] / 2);
 }
 
@@ -346,6 +380,10 @@ function history(s, rng) {
     s.flags.edwards = true;
     s.edwards += 4;
     news('John Newman Edwards of the Kansas City Times, who rode with Jo Shelby, has started printing letters from Missouri\'s "outlaws" and defending them as Southern men driven to it. He will print yours. (After a job you can write to him: legend and Southern sympathy rise, and so does the reward.)', 'A friend at the Kansas City Times');
+  }
+  if (y === 1872 && q === 2) {
+    s.flags.tips = { ...(s.flags.tips || {}), exposition: s.t };
+    news('The Kansas City Industrial Exposition opens this season. Thirty thousand people a day pay at the gate, and the gate takings go to the bank in a tin box once a day. (A one-season job: the Exposition gate.)', 'The fair');
   }
   if (y === 1873 && q === 0) {
     news('The railroads are across Missouri now and the express companies ship cash in locked safes in the baggage cars. A train can be stopped like a stage, if you pull up a rail. Train jobs are open.', 'The express cars');

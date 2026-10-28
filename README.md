@@ -40,7 +40,7 @@ sim/          bots, batch runner, kill gate, inert check, tracer
 test/         invariants
 tools/        bundler, icon generator, smoke and bundle checks
 docs/         SPEC.md (what it is), DESIGN.md (how it is built, what was measured),
-              FRAME-SANDBOX.md (the sandbox round: the request and the design)
+              FRAME-SANDBOX.md, FRAME-PACE.md (each round: the request, the design, the numbers)
 ```
 
 ## Rules the code is organised around

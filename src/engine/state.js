@@ -4,13 +4,13 @@
 // Date.now. Randomness comes from named streams keyed by (seed, season, label),
 // so the save needs no generator state and a reload cannot reroll anything.
 
-import { COUNTIES, TARGETS } from '../data/world.data.js';
+import { COUNTIES, ALL_TARGETS } from '../data/world.data.js';
 import { CONFIG } from '../data/config.data.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
 import { DEFAULT_CREATION, creationProblem, companionChoices, makeLeader, makeMember, startingFamily, backgroundOf } from './people.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'outlaw.save.v1'; // a contract: never rename
 
 /** A tuning number, with any override this game was started with (ablations). */
@@ -44,6 +44,12 @@ export function rollTarget(seed, t, def, prev) {
 export const modActive = (s, key) => !!s.mods?.[key] && yearOf(s.t) <= s.mods[key].until;
 /** Cash in the vault after the times: the Panic of 1873 thins the country banks. */
 export const cashOf = (s, def, cash) => Math.round(def.kind === 'bank' && modActive(s, 'bankCash') ? cash * s.mods.bankCash.x : cash);
+/** What a target truly holds this year: what scouting (or an informer) tells you. */
+export function readTarget(s, def) {
+  if (def.far) return { guard: def.guard, fight: def.fight, cash: s.flags.northfieldCash };
+  const t = s.targets[def.id];
+  return { guard: trueGuard(def, t), fight: trueFight(def, t), cash: cashOf(s, def, t.cash) };
+}
 /** Scouting holds until the new year re-rolls the town's luck, or until you rob it. */
 export const intelValid = (s, id) => !!s.intel[id] && yearOf(s.intel[id].t) === yearOf(s.t);
 export const trueGuard = (def, t) => Math.max(0, Math.min(3, def.guard + t.boostG + t.rollG));
@@ -90,6 +96,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
     nextId: 1,
     houses: {},
     assets: { farm: false, business: null, lawyer: false },
+    incident: null,
     bribed: {},
     mods: {},
     targets: {},
@@ -111,7 +118,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
   };
   for (const c of COUNTIES) if (c.southern) s.sym[c.id] += bg.southern;
   s.sym[s.home] = Math.max(0, Math.min(100, s.sym[s.home] + bg.home + 8)); // home is home
-  for (const def of TARGETS) s.targets[def.id] = rollTarget(s.seed, 0, def);
+  for (const def of ALL_TARGETS) s.targets[def.id] = rollTarget(s.seed, 0, def);
   pay(s, K(s, 'startPurse') + bg.purse, 'What you came home with');
   const homeName = COUNTIES.find((c) => c.id === s.home).name;
   s.log.push({ t: 0, kind: 'story', text: `The war is over. Not for ${s.me.first} ${s.me.last}. You are back on the farm in ${homeName} County with ${picks.map((p) => p.name).join(', ')}, and none of you means to plough.` });
@@ -153,6 +160,12 @@ const MIGRATIONS = {
       dead: s.dead.map((d) => ({ ...d, id: fixWho(d.id) })),
       ambush: s.ambush ? { by: fixWho(s.ambush.by) } : null,
     };
+  },
+  // Version 2 saves from before the end game and incidents lack both.
+  2: (s) => {
+    const targets = { ...s.targets };
+    for (const def of ALL_TARGETS) if (!targets[def.id]) targets[def.id] = rollTarget(s.seed, s.t, def);
+    return { ...s, v: 3, targets, assets: s.assets || { farm: false, business: null, lawyer: false }, incident: null };
   },
 };
 export function migrate(s) {

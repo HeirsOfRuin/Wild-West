@@ -107,3 +107,11 @@ export function childName(seed, n, last) {
   const boy = r.chance(0.5);
   return { name: `${r.pick(boy ? FIRST_NAMES : WOMEN)} ${last}`, rel: boy ? 'son' : 'daughter' };
 }
+
+/** The wounded bushwhacker who turns up at your hideout. */
+export function strangerOffer(rng, id) {
+  const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
+  return { id, name: `${first} ${last}`, short: first, gun: rng.range(2, 3), nerve: rng.range(2, 3), horse: 2,
+    traits: rng.chance(0.4) ? ['hothead'] : [], loyalty: 68, rel: 'veteran',
+    pitch: 'Rode with Bloody Bill. You took him in when he had nowhere to go, and he has not forgotten it.' };
+}
