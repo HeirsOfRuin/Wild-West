@@ -19,10 +19,14 @@ export function retireProblem(s) {
   if (n) return `The gang has to be gone first: ${n} still ride with you (dismiss them from the Gang screen).`;
   if (!s.cover.place) return 'You need a respectable life to retire into: live as Mr. Howard first.';
   if (s.cover.level < K(s, 'retireNeedCover')) return `Mr. Howard is not yet believed (cover ${Math.round(s.cover.level)} of ${K(s, 'retireNeedCover')}). Live it longer.`;
-  if (s.purse < K(s, 'retireNeedPurse')) return `You need $${K(s, 'retireNeedPurse').toLocaleString('en-US')} to live on (you have $${s.purse.toLocaleString('en-US')}).`;
+  const need = retirePurse(s);
+  if (s.purse < need) return `You need $${need.toLocaleString('en-US')} to live on (you have $${s.purse.toLocaleString('en-US')})${s.assets?.farm ? '' : '; a farm in Tennessee cuts that'}.`;
   if (!familyAlive(s)) return 'There is no family left to retire for.';
   return null;
 }
+
+/** Cash a retirement needs: half with a farm to live off. */
+export const retirePurse = (s) => Math.round(K(s, 'retireNeedPurse') * (s.assets?.farm ? K(s, 'farmPurseShare') : 1));
 
 /** Quiet seasons a retirement needs: more the more famous you were. */
 export function retireNeeded(s) {

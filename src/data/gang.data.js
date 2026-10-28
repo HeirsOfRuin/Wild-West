@@ -106,3 +106,16 @@ export const SAFE_HOUSE = [
   { level: 1, name: 'A safe house', cost: 400, text: 'A family paid to hide you and keep quiet.' },
   { level: 2, name: 'A hidden room and fresh horses', cost: 500, text: 'A cellar under the smokehouse and two fast horses in the barn.' },
 ];
+
+// Late purchases for the end game: what a man buys to stop being an outlaw.
+// Each is modelled on what the James brothers actually did after 1876.
+export const ASSETS = [
+  { id: 'farm', name: 'A farm under another name in Tennessee', cost: 2500,
+    text: 'Frank James farmed outside Nashville as "B. J. Woodson". A farm feeds you: retiring needs less cash, and Mr. Howard is believed faster in Tennessee and recognised less there.',
+    needs: 'married' },
+  { id: 'business', name: 'A respectable business where you live', cost: 1800,
+    text: 'A feed store, a livery or a grain dealership: Jesse dealt in grain as Thomas Howard. Cover grows faster and costs less where you keep it.',
+    needs: 'cover' },
+  { id: 'lawyer', name: 'A lawyer in Jefferson City', cost: 1500,
+    text: 'The kind of lawyers who would later win Frank James an acquittal. A good lawyer and friends in the legislature make the reward fade faster, and captured men keep quiet when they know you will pay for their defence.' },
+];

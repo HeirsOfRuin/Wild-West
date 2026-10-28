@@ -89,6 +89,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
     offers: [],
     nextId: 1,
     houses: {},
+    assets: { farm: false, business: null, lawyer: false },
     bribed: {},
     mods: {},
     targets: {},
@@ -147,7 +148,7 @@ const MIGRATIONS = {
     return {
       ...s, v: 2, gang, family, married: year >= 1874,
       me: { first: 'Jesse', last: 'James', background: 'bushwhacker', home: 'clay' }, home: 'clay',
-      offers: [], nextId: 1, houses: {}, bribed: {}, mods: {},
+      offers: [], nextId: 1, houses: {}, bribed: {}, mods: {}, assets: { farm: false, business: null, lawyer: false },
       stats: { ...s.stats, spent: 0 },
       dead: s.dead.map((d) => ({ ...d, id: fixWho(d.id) })),
       ambush: s.ambush ? { by: fixWho(s.ambush.by) } : null,

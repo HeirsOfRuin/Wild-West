@@ -23,7 +23,7 @@ export const CONFIG = {
   retireNeedPurse: 5000,
   stake: 300, // what a man expects to go home on
   retireNeedCover: 60,
-  retireSeasons: 8, // quiet seasons before the world forgets you...
+  retireSeasons: 10, // quiet seasons before the world forgets you...
   retireSeasonsPerLegend: 10, // ...plus one more for every 10 points of peak legend
 
   // safe houses
@@ -41,6 +41,15 @@ export const CONFIG = {
   bribePerHeat: 8, // dollars per point of heat to pay off a sheriff (Union counties double)
   doctorCost: 100,
   marryCost: 300,
+  farmPurseShare: 0.6, // a farm in another name: retiring needs this share of the cash
+  farmCoverX: 1.25, // ...and cover in Tennessee grows this much faster
+  farmRecognise: 0.85, // ...and recognition there is this much
+  businessCoverGain: 6, // a business where you live: extra cover a season
+  businessCostCut: 0.5, // ...and that place's cover costs this share
+  rewardFade: 0.995, // the reward each season
+  lawyerRewardFade: 0.985, // ...with a lawyer working for you
+  hushCost: 250, // money for a man who has gone home
+  hushLoyalty: 25,
   childChance: 0.3, // each spring after marrying, up to three children
   recruitOffers: 2, // most new men looking for you in a season
   offerLife: 2, // seasons an offer stands

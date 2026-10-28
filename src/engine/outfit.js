@@ -2,7 +2,7 @@
 // blind eye, a doctor, a wedding. All free actions: they do not end the season.
 // Every option comes with its lock reason so the screen can say why not.
 
-import { GEAR, SAFE_HOUSE } from '../data/gang.data.js';
+import { GEAR, SAFE_HOUSE, ASSETS } from '../data/gang.data.js';
 import { COUNTIES } from '../data/world.data.js';
 import { K, yearOf } from './state.js';
 import { pay } from './money.js';
@@ -102,6 +102,54 @@ export function doctor(s, id) {
   const g = rawMember(s, id);
   spend(s, opt.cost, `A doctor for ${g.name}, and his silence`);
   g.wounded = 0;
+}
+
+// ---- the end game -----------------------------------------------------------
+
+export function assetOptions(s) {
+  return ASSETS.map((a) => {
+    const owned = a.id === 'business' ? !!s.assets.business : s.assets[a.id];
+    let lock = null;
+    if (owned) lock = a.id === 'business' ? `You own one in ${COVER_PLACES[s.assets.business]}.` : 'You own it.';
+    else if (a.needs === 'married' && !s.married) lock = 'A farm needs a family to work it: marry first.';
+    else if (a.needs === 'cover' && !s.cover.place) lock = 'You need somewhere to live as Mr. Howard first.';
+    else if (s.purse < a.cost) lock = `Costs $${a.cost.toLocaleString('en-US')}.`;
+    return { ...a, owned, lock, where: a.id === 'business' ? s.assets.business || s.cover.place : null };
+  });
+}
+const COVER_PLACES = { kc: 'Kansas City', stjoe: 'St. Joseph', nashville: 'Nashville' };
+
+export function buyAsset(s, id) {
+  const opt = assetOptions(s).find((o) => o.id === id);
+  if (!opt) throw new Error('No such thing to buy.');
+  if (opt.lock) throw new Error(opt.lock);
+  spend(s, opt.cost, opt.name + (id === 'business' ? ` in ${COVER_PLACES[s.cover.place]}` : ''));
+  if (id === 'business') s.assets.business = s.cover.place;
+  else s.assets[id] = true;
+  s.log.push({ t: s.t, kind: 'story', text: { farm: 'You buy a farm in Tennessee under another name. Nobody there has heard of you.',
+    business: `Mr. Howard opens a business in ${COVER_PLACES[s.cover.place]}. He pays his bills on time.`,
+    lawyer: 'A Jefferson City lawyer takes your money and your case. He knows the governor\'s friends.' }[id] });
+}
+
+/** Money for a man who has gone home: it buys back his goodwill, and his silence. */
+export function hushOption(s, id) {
+  const g = rawMember(s, id);
+  let lock = null;
+  if (!g || g.status !== 'gone') lock = 'Only a man who has gone home can be paid to stay quiet.';
+  else if (g.hushT === s.t) lock = 'You have sent him money this season.';
+  else if (s.purse < K(s, 'hushCost')) lock = `Costs $${K(s, 'hushCost')}.`;
+  return { id, cost: K(s, 'hushCost'), lock };
+}
+
+export function hush(s, id) {
+  const opt = hushOption(s, id);
+  if (opt.lock) throw new Error(opt.lock);
+  const g = rawMember(s, id);
+  spend(s, opt.cost, `Money sent to ${g.name}`);
+  g.pocket += opt.cost;
+  g.hushT = s.t;
+  g.loyalty = Math.min(100, g.loyalty + K(s, 'hushLoyalty'));
+  if (g.loyalty >= K(s, 'betrayRecover')) g.stage = 0;
 }
 
 // ---- a wedding --------------------------------------------------------------

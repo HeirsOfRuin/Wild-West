@@ -50,7 +50,8 @@ export function informChance(s, county, atFarm = false) {
 export function recognitionChance(s, place) {
   if (!place) return 0;
   const inState = place !== 'nashville';
-  return clamp((s.legend / 100) * 0.22 * (1 - s.cover.level / 120) * (inState ? 1.6 : 1), 0.005, 0.5);
+  const farm = place === 'nashville' && s.assets?.farm ? K(s, 'farmRecognise') : 1;
+  return clamp((s.legend / 100) * 0.22 * (1 - s.cover.level / 120) * (inState ? 1.6 : 1) * farm, 0.005, 0.5);
 }
 
 /**
@@ -78,7 +79,7 @@ export function seasonPressure(s, ctx, rng, events) {
   if (s.outcome) return;
 
   // The reward barely fades.
-  s.reward = Math.round(s.reward * 0.995);
+  s.reward = Math.round(s.reward * (s.assets?.lawyer ? K(s, 'lawyerRewardFade') : K(s, 'rewardFade')));
 
   // A turncoat leads them to you.
   if (s.raid && s.raid.t < s.t) {

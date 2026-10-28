@@ -59,7 +59,7 @@ test('every game ends, and no later than the last season', () => {
 
 test('free actions leave the season open; season actions close it', () => {
   play(3, 'careful', (b, a, s) => {
-    const free = ['scout', 'recruit', 'dismiss', 'kill', 'bonus', 'letter', 'buy', 'house', 'bribe', 'doctor', 'marry'].includes(a.type);
+    const free = ['scout', 'recruit', 'dismiss', 'kill', 'bonus', 'letter', 'buy', 'house', 'bribe', 'doctor', 'marry', 'asset', 'hush'].includes(a.type);
     if (free) assert.equal(s.t, b.t, `${a.type} moved the clock`);
     else if (!s.outcome) assert.equal(s.t, b.t + 1, `${a.type} did not move the clock`);
   });

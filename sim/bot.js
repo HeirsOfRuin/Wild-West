@@ -11,7 +11,7 @@ import { members } from '../src/engine/gang.js';
 // outfit: buys horses and guns; houses: buys safe houses; bribes: pays sheriffs.
 // Each defaults on for the reference policy; the "*-plain" variants switch them
 // off to measure what the money buys.
-const SPEND = { outfit: true, houses: true, bribes: true };
+const SPEND = { outfit: true, houses: true, bribes: true, endgame: true };
 export const POLICIES = {
   careful: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
   noscout: { risk: 1, scout: false, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
@@ -22,6 +22,7 @@ export const POLICIES = {
   stayer: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 1e9, letters: true, give: true, ...SPEND },
   // The exploit hunt: marry at once, rob until $6,000, then quit (from 1867).
   quickout: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 6000, windFrom: 1867, marryAt: 1866, letters: false, give: true, ...SPEND },
+  noendgame: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND, endgame: false },
   plain: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, outfit: false, houses: false, bribes: false },
   hermit: { risk: 1, scout: false, approach: 'any', jobEvery: 99, never: true, retireAt: 9999, retirePurse: 1e9, letters: false, give: false },
 };
@@ -82,16 +83,32 @@ export function step(s, polName = 'careful') {
   const v = view(s);
   const y = yearOf(s.t);
 
-  if (s.retired) return { type: 'wait' };
+  if (s.retired) {
+    const sore = pol.endgame && v.gone.find((g) => !g.hush.lock && s.gang.find((x) => x.id === g.id).loyalty < 50 && s.purse >= 2000);
+    return sore ? { type: 'hush', id: sore.id } : { type: 'wait' };
+  }
 
   // A wife: somebody to quit for.
   if (!v.married && !v.marry && y >= (pol.marryAt ?? 1868) && s.purse >= 800) return { type: 'marry' };
+
+  // The end game: a lawyer once the reward bites; a farm and a business when quitting.
+  if (pol.endgame) {
+    const a = Object.fromEntries(v.assets.map((x) => [x.id, x]));
+    if (!a.lawyer.lock && s.reward >= 4000 && s.purse >= a.lawyer.cost + 1500) return { type: 'asset', id: 'lawyer' };
+  }
 
   // Winding down: dissolve, live as Mr. Howard, retire.
   const windDown = y >= pol.retireAt || (y >= (pol.windFrom ?? 1873) && s.purse >= pol.retirePurse);
   if (windDown) {
     const f = v.gang.find((m) => !m.leader);
     if (f) return { type: 'dismiss', id: f.id, stake: s.purse >= 300 + 5000 };
+    if (pol.endgame) {
+      const a = Object.fromEntries(v.assets.map((x) => [x.id, x]));
+      if (!a.farm.lock && s.purse >= a.farm.cost + 1500) return { type: 'asset', id: 'farm' };
+      if (!a.business.lock && s.cover.place === 'nashville' && s.purse >= a.business.cost + 2600) return { type: 'asset', id: 'business' };
+      const sore = v.gone.find((g) => !g.hush.lock && s.gang.find((x) => x.id === g.id).loyalty < 50 && s.purse >= 3000);
+      if (sore) return { type: 'hush', id: sore.id };
+    }
     if (!v.actions.retire) return { type: 'retire' };
     const place = v.coverOptions.find((o) => o.id === 'nashville' && !o.lock) || v.coverOptions.find((o) => !o.lock);
     if (place && (s.purse >= 2000 + place.cost || s.cover.level < 60)) return { type: 'cover', place: place.id };

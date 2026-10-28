@@ -188,6 +188,9 @@ function seasonTab(v) {
     <p>Retire as Mr. Howard with the gang gone and the family alive, and survive the quiet years after. Few manage it.</p>
     ${lockLine(v.actions.retire)}
     <button class="btn secondary block" data-act="retire" ${v.actions.retire ? 'disabled' : ''}>Retire</button></div>`);
+  parts.push(`<h2>Plans for after</h2><p class="small">Bigger things to buy, for the day you stop. None of them ends the season.</p>
+    ${v.assets.map((a) => `<div class="card ${a.owned ? '' : a.lock ? 'locked' : ''}"><div class="row"><h3>${esc(a.name)}</h3><span class="small">${a.owned ? 'Yours' : $(a.cost)}</span></div>
+      <p class="small">${esc(a.text)}</p>${a.owned ? '' : `${lockLine(a.lock)}<button class="btn small" data-act="asset" data-v="${a.id}" ${a.lock ? 'disabled' : ''}>Buy${a.id === 'business' && a.where ? ` in ${esc(coverName(a.where))}` : ''}</button>`}</div>`).join('')}`);
   return parts.join('');
 }
 
@@ -275,7 +278,7 @@ function coverScreen(v) {
   return `<button class="btn secondary small" data-act="back">Back</button><h2>Live as Mr. Howard</h2>
     <p class="small">Cover grows each season you live it, and is lost if you move. Riding out on a job costs ${K(S, 'coverJobLoss')} cover. The family comes with you. Men left idle at home grow restless. Recognition depends on your legend and your cover.</p>
     ${v.coverOptions.map((o) => `<div class="card ${o.lock ? 'locked' : ''}"><div class="row"><h3>${esc(o.name)}</h3><span class="small">${$(o.cost)} a season</span></div>
-      <div class="small">Cover +${K(S, 'coverGain')[o.id]} a season · recognised: ${band(v.risks.recognise[o.id])}${o.id === 'nashville' ? ' · out of the state: the Pinkertons lose you fastest' : ''}${v.cover.place === o.id ? ` · <b>your cover here: ${v.cover.level}</b>` : ''}</div>
+      <div class="small">Cover +${o.gain} a season · recognised: ${band(v.risks.recognise[o.id])}${o.id === 'nashville' ? ' · out of the state: the Pinkertons lose you fastest' : ''}${v.cover.place === o.id ? ` · <b>your cover here: ${v.cover.level}</b>` : ''}</div>
       ${lockLine(o.lock)}<button class="btn block" data-act="cover" data-v="${o.id}" ${o.lock ? 'disabled' : ''}>Live here this season</button></div>`).join('')}`;
 }
 
@@ -310,7 +313,9 @@ function gangTab(v) {
       <p>${esc(r.pitch)}</p>${lockLine(r.lock)}
       <button class="btn small" data-act="recruit" data-id="${r.id}" ${r.lock ? 'disabled' : ''}>Take him on (${$(K(S, 'recruitCost'))})</button></div>`).join('')
       : `<p class="small">Nobody this season. More men come, and better ones, as your legend grows (legend 15 brings one a season, 40 brings two).</p>`}
-    ${v.gone.length ? `<h2>Gone</h2><ul class="events">${v.gone.map((g) => `<li class="${g.status === 'dead' ? 'bad' : ''}">${esc(g.name)}: ${{ dead: 'dead', captured: 'in prison', gone: 'gone home', turned: 'turned on you' }[g.status]}</li>`).join('')}</ul>` : ''}
+    ${v.gone.length ? `<h2>Gone</h2><p class="small">Men who went home still know your face and your hiding places. When their money runs out the reward looks better. Money sent now buys back goodwill (${$(K(S, 'hushCost'))}).</p>
+      <ul class="events">${v.gone.map((g) => `<li class="${g.status === 'dead' ? 'bad' : ''}">${esc(g.name)}: ${{ dead: 'dead', captured: 'in prison', gone: 'gone home', turned: 'turned on you' }[g.status]}
+      ${g.status === 'gone' ? `<br><button class="btn small secondary" data-act="hush" data-id="${g.id}" ${g.hush.lock ? 'disabled' : ''}>Send him ${$(g.hush.cost)}</button>` : ''}</li>`).join('')}</ul>` : ''}
     <h2>Family</h2>
     <ul class="events">${v.family.map((f) => `<li class="${f.alive ? '' : 'bad'}">${esc(f.name)}, your ${esc(f.rel)}${f.alive ? (f.injured ? ' (maimed)' : '') : ' (dead)'}</li>`).join('')}</ul>
     <p class="small">The family lives ${S.familyAt === 'farm' ? `on the farm in ${esc(COUNTIES.find((c) => c.id === v.home).name)} County` : `with you in ${coverName(S.familyAt)}`}.</p>
@@ -365,6 +370,7 @@ function helpScreen() {
   <div class="card"><h3>Sympathy</h3><p>A county under ${C.safeSym} will not hide you. Robbing its bank costs ${C.symBank} (your home county ${C.symHomeBank}). Southern counties like train jobs (+${C.symTrain}). The war fades from ${C.warFadeFrom}.</p></div>
   <div class="card"><h3>Loyalty</h3><p>Hidden. Each man spends ${$(C.livingCost)} a season; broke, idle or frightened men turn. Turning takes seasons and shows signs. Your own kin never sell you.</p></div>
   <div class="card"><h3>The outfit</h3><p>Better horses and guns add half a point a step to a man's riding or shooting, and go where he goes. Safe houses let you hide where friends will not, and fresh horses there shake posses. A paid sheriff halves a county's heat. Men who come through a job unhurt sometimes get better at the work they did. Each man costs ${$(C.keepPerMan)} a season in keep.</p></div>
+  <div class="card"><h3>Plans for after</h3><p>A farm in Tennessee under another name (retiring needs ${Math.round(C.farmPurseShare * 100)}% of the cash; Mr. Howard is believed faster and recognised less there). A business where you live (cover +${C.businessCoverGain} a season, the life costs ${Math.round(C.businessCostCut * 100)}% as much). A lawyer in Jefferson City (the reward fades faster; captured men keep quiet). Money for men who went home buys back their goodwill.</p></div>
   <div class="card"><h3>Ending</h3><p>Killed, captured or betrayed ends it. To win, marry, then retire: the gang gone, cover ${C.retireNeedCover}+, ${$(C.retireNeedPurse)} saved, the family alive; then survive ${C.retireSeasons} quiet seasons, plus one for every ${C.retireSeasonsPerLegend} points of your peak legend. After ${C.endYear} the era is over.</p></div>`;
 }
 
@@ -463,6 +469,8 @@ app.addEventListener('click', (ev) => {
     case 'house': return doAct({ type: 'house', county: d.v });
     case 'bribe': return doAct({ type: 'bribe', county: d.v });
     case 'marry': return doAct({ type: 'marry' });
+    case 'asset': return doAct({ type: 'asset', id: d.v });
+    case 'hush': return doAct({ type: 'hush', id: d.id });
     case 'county': U.county = d.id; break;
     case 'continue': S = load(); break;
     case 'import': try { S = fromCode(document.getElementById('code-in').value); save(); } catch (e) { U.toast = e.message; } break;

@@ -8,6 +8,7 @@ import { companionChoices, creationProblem } from '../src/engine/people.js';
 import { forecast, view } from '../src/engine/derive.js';
 import { ledgerSum } from '../src/engine/money.js';
 import { step } from '../sim/bot.js';
+import { retirePurse } from '../src/engine/ending.js';
 
 const base = { first: 'Ike', last: 'Carver', background: 'farmer', home: 'ray', bonus: 'nerve', companions: ['brother', 'neighbour', 'hand'] };
 
@@ -63,5 +64,24 @@ test('a version-1 save opens and plays on to an ending', () => {
   let n = 0;
   while (!s.outcome && n++ < 500) s = act(s, step(s, 'careful'));
   assert.ok(s.outcome, 'the migrated game reached an ending');
+  assert.equal(s.purse, ledgerSum(s));
+});
+
+test('plans for after: a farm cuts the cash to retire; a lawyer speeds the reward away; money quiets an old friend', () => {
+  let s = newGame(4);
+  s.purse = 20000; s.ledger.push({ t: 0, amount: 20000 - ledgerSum(s), why: 'test' });
+  assert.match(view(s).assets.find((a) => a.id === 'farm').lock, /marry/);
+  s = act(s, { type: 'marry' });
+  s = act(s, { type: 'asset', id: 'farm' });
+  assert.ok(s.assets.farm);
+  assert.equal(retirePurse(s), 3000);
+  s.reward = 10000;
+  const lawyerless = act(s, { type: 'lielow', at: 'farm' }).reward;
+  s = act(s, { type: 'asset', id: 'lawyer' });
+  assert.ok(act(s, { type: 'lielow', at: 'farm' }).reward < lawyerless);
+  s = act(s, { type: 'dismiss', id: 'c-warfriend' });
+  const before = s.gang.find((g) => g.id === 'c-warfriend').loyalty;
+  s = act(s, { type: 'hush', id: 'c-warfriend' });
+  assert.ok(s.gang.find((g) => g.id === 'c-warfriend').loyalty > before);
   assert.equal(s.purse, ledgerSum(s));
 });

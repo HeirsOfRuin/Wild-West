@@ -23,10 +23,14 @@ console.log(r.text);
 
 // Traits: switch one trait off for everyone (tune.offTraits) and see whether any game changes.
 const inertTraits = [];
-const base = SEEDS.map((s) => JSON.stringify(playAll(s, {}).map((g) => ({ ...g, tune: {} }))));
+// Traits are rare in any one game (a hothead only matters if he goes inside), so
+// they get more seeds than the knobs; test/traits.test.js covers each by a scene.
+const TSEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
+const strip = (games) => JSON.stringify(games.map((g) => ({ ...g, tune: {} })));
+const base = TSEEDS.map((s) => strip(playAll(s, {})));
 for (const t of Object.keys(TRAITS)) {
-  const changed = SEEDS.filter((s, i) => JSON.stringify(playAll(s, { offTraits: [t] }).map((g) => ({ ...g, tune: {} }))) !== base[i]).length;
-  console.log(`trait ${t.padEnd(12)} ${changed ? `moves the game (${changed}/${SEEDS.length} seeds)` : 'INERT'}`);
+  const changed = TSEEDS.filter((s, i) => strip(playAll(s, { offTraits: [t] })) !== base[i]).length;
+  console.log(`trait ${t.padEnd(12)} ${changed ? `moves the game (${changed}/${TSEEDS.length} seeds)` : 'INERT'}`);
   if (!changed) inertTraits.push(t);
 }
 if (r.inert.length || inertTraits.length) { console.log(`\n!! inert: ${[...r.inert, ...inertTraits].join(', ')}`); process.exit(1); }

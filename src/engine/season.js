@@ -23,7 +23,7 @@ import { runJob, targetDef, targetOpen } from './job.js';
 import { active, followers, member, recruit, dismiss, killMember, bonus, seasonLoyalty, seasonBetrayal, nudge } from './gang.js';
 const nudgeKeep = (s, id) => nudge(s, id, -4);
 import { seasonPressure, COVER_COUNTY, COVER_NAME } from './pressure.js';
-import { buyGear, buyHouse, bribe, doctor, marry, loseHouse } from './outfit.js';
+import { buyGear, buyHouse, bribe, doctor, marry, loseHouse, buyAsset, hush } from './outfit.js';
 import { recruitOffers, childName } from './people.js';
 import { STATE_NEWS, STATE_FILLER } from '../data/news.data.js';
 import { retireProblem, finalScore, retireNeeded } from './ending.js';
@@ -45,6 +45,8 @@ export function act(s0, a) {
     case 'bribe': bribe(s, a.county); return s;
     case 'doctor': doctor(s, a.id); return s;
     case 'marry': marry(s); return s;
+    case 'asset': buyAsset(s, a.id); return s;
+    case 'hush': hush(s, a.id); return s;
     case 'job': case 'lielow': case 'cover': case 'retire': case 'wait': case 'rideagain':
       return seasonAction(s, a);
     default: throw new Error(`Unknown action: ${a.type}`);
@@ -121,10 +123,19 @@ export function lieLowOptions(s) {
 }
 
 export function coverOptions(s) {
-  return Object.keys(COVER_NAME).map((id) => ({
-    id, name: COVER_NAME[id], cost: K(s, 'coverCost')[id],
-    lock: s.purse < K(s, 'coverCost')[id] ? `Living as Mr. Howard in ${COVER_NAME[id]} costs $${K(s, 'coverCost')[id]} a season.` : null,
-  }));
+  return Object.keys(COVER_NAME).map((id) => {
+    const cost = coverCost(s, id);
+    return { id, name: COVER_NAME[id], cost, gain: coverGain(s, id),
+      lock: s.purse < cost ? `Living as Mr. Howard in ${COVER_NAME[id]} costs $${cost} a season.` : null };
+  });
+}
+
+/** A business where you live halves the cost of the life. */
+export const coverCost = (s, id) => Math.round(K(s, 'coverCost')[id] * (s.assets?.business === id ? K(s, 'businessCostCut') : 1));
+/** Cover grows faster with a business there, or a farm in Tennessee. */
+export function coverGain(s, id) {
+  return Math.round(K(s, 'coverGain')[id] * (id === 'nashville' && s.assets?.farm ? K(s, 'farmCoverX') : 1)
+    + (s.assets?.business === id ? K(s, 'businessCoverGain') : 0));
 }
 
 function seasonAction(s, a) {
@@ -175,7 +186,7 @@ function seasonAction(s, a) {
       if (s.cover.place !== a.place) s.cover.level = 0;
       s.cover.place = a.place;
       pay(s, -opt.cost, `Rent and a respectable life in ${opt.name}`);
-      s.cover.level = Math.min(100, s.cover.level + K(s, 'coverGain')[a.place]);
+      s.cover.level = Math.min(100, s.cover.level + opt.gain);
       s.familyAt = a.place;
       ctx.coverPlace = a.place;
       ctx.where = COVER_COUNTY[a.place];

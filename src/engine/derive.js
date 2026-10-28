@@ -10,7 +10,7 @@ import { TARGETS, NORTHFIELD, KINDS, COUNTIES } from '../data/world.data.js';
 import { K, yearOf, dateOf, intelValid, believedGuard, believedFight, cashOf, modActive } from './state.js';
 import { targetDef, targetOpen, hideouts, hideoutCounty, freshHorses } from './job.js';
 import { members, active, followers, mood, recruitOptions } from './gang.js';
-import { gearOptions, houseOptions, bribeOption, doctorOption, marryProblem } from './outfit.js';
+import { gearOptions, houseOptions, bribeOption, doctorOption, marryProblem, assetOptions, hushOption } from './outfit.js';
 import { scoutProblem, letterProblem, lieLowOptions, coverOptions } from './season.js';
 import { informChance, recognitionChance, COVER_COUNTY } from './pressure.js';
 import { retireProblem, familyAlive } from './ending.js';
@@ -152,7 +152,8 @@ export function view(s) {
       traits: m.traits, kin: m.kin, mood: mood(m), pocket: m.pocket, wounded: m.wounded, suspected: m.suspected,
       rode: m.rode, outfit: gearOptions(s, m.id), doctor: doctorOption(s, m.id),
     })),
-    gone: members(s).filter((m) => m.status !== 'active' && !m.leader).map((m) => ({ id: m.id, name: m.name, status: m.status })),
+    gone: members(s).filter((m) => m.status !== 'active' && !m.leader).map((m) => ({ id: m.id, name: m.name, status: m.status, hush: hushOption(s, m.id) })),
+    assets: assetOptions(s),
     recruits: recruitOptions(s),
     actions: {
       job: s.retired ? 'You have quit the life.' : null,

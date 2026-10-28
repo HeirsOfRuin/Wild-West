@@ -199,7 +199,8 @@ export function runJob(s, plan, rng, events) {
       } else {
         g.status = 'captured'; g.capturedT = s.t;
         beats.push(`${name} is taken alive ${c.where}.`);
-        if (g.loyalty < 50 && s.pinkActive) s.pinkerton = Math.min(100, s.pinkerton + 10);
+        // A captured man who doubts you talks, unless your lawyer is defending him.
+        if (g.loyalty < 50 && s.pinkActive && !s.assets?.lawyer) s.pinkerton = Math.min(100, s.pinkerton + 10);
       }
     }
   }
