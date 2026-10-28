@@ -1,0 +1,24 @@
+# The invariant suite on every push and pull request. The balance instruments
+# in sim/ are not run here: they measure, they do not pass or fail.
+
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Invariants
+        run: node --test "test/*.test.js"
+      - name: The single-file build assembles
+        run: node tools/bundle.js

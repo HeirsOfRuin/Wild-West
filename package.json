@@ -1,0 +1,20 @@
+{
+  "name": "dead-or-alive",
+  "version": "0.1.0",
+  "description": "Lead an outlaw gang in Missouri, 1866-1882. Rob banks and trains, keep the counties on your side, and watch your own men.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "sim": "node sim/run.js",
+    "killgate": "node sim/killgate.js",
+    "inert": "node sim/inert.js",
+    "trace": "node sim/trace.js",
+    "build": "node tools/bundle.js",
+    "smoke": "node tools/smoke.mjs",
+    "check-bundle": "node tools/check-bundle.mjs",
+    "check": "node --test \"test/*.test.js\" && node tools/bundle.js && node tools/check-bundle.mjs && node tools/smoke.mjs",
+    "serve": "python3 -m http.server 8000"
+  },
+  "engines": { "node": ">=20" }
+}
