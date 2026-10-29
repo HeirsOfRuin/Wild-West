@@ -5,15 +5,17 @@
 
 import { INCIDENTS } from '../data/incidents.data.js';
 import { COUNTIES, TARGETS } from '../data/world.data.js';
-import { K, yearOf, seasonOf, readTarget } from './state.js';
+import { K, yearOf, seasonOf, readTarget, adjacent as adjacentTo } from './state.js';
 import { pay } from './money.js';
 import { followers, nudge, rawMember } from './gang.js';
+import { sheriffKilled } from './law.js';
+import { COUNTIES as ALL_COUNTIES } from '../data/world.data.js';
 import { strangerOffer } from './people.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const countyName = (id) => COUNTIES.find((c) => c.id === id)?.name ?? '';
 const KNOWN = new Set(['purse', 'sym', 'heat', 'legend', 'reward', 'pinkerton', 'cover', 'loyalty', 'leaveIn', 'offer',
-  'tip', 'intel', 'reveal', 'ride', 'restart', 'exposed', 'childRisk', 'chance']);
+  'tip', 'intel', 'reveal', 'ride', 'restart', 'exposed', 'childRisk', 'chance', 'lieutenant', 'away', 'quitChance', 'killSheriff']);
 
 /** Helpers the table's when() functions use to bind people and places. */
 function helpers(s, rng) {
@@ -25,6 +27,13 @@ function helpers(s, rng) {
     hottest: (min) => { const c = COUNTIES.filter((k) => s.heat[k.id] >= min).sort((a, b) => s.heat[b.id] - s.heat[a.id])[0]; return c?.id ?? null; },
     twoFollowers: () => (f.length >= 2 ? rng.shuffle(f.map((m) => m.id)).slice(0, 2) : null),
     oneFollower: (pred) => { const xs = f.filter(pred).filter((m) => !m.leaveT); return xs.length ? rng.pick(xs).id : null; },
+    storyMan: (story, pred) => { const xs = f.filter((m) => m.story === story && !m.storyDone && pred(m)); return xs.length ? rng.pick(xs).id : null; },
+    anyCounty: () => rng.pick(ALL_COUNTIES).id,
+    huntingSheriff: () => {
+      if (!s.law || !where) return null;
+      const near = ALL_COUNTIES.filter((c) => s.law.sheriffs[c.id].grudge >= K(s, 'grudgeHunt') && (c.id === where || adjacentTo(c.id, where)));
+      return near.length ? near[0].id : null;
+    },
     oneGone: () => { const xs = s.gang.filter((g) => g.status === 'gone' && g.kin !== 'family'); return xs.length ? rng.pick(xs).id : null; },
   };
 }
@@ -32,6 +41,7 @@ function helpers(s, rng) {
 function eligible(s, inc) {
   const y = yearOf(s.t);
   if (!!inc.retired !== !!s.retired) return false;
+  if (inc.story && s.tune?.offStories) return false; // ablation switch
   if (inc.minLegend && s.legend < inc.minLegend) return false;
   if (inc.needPink && !s.pinkActive) return false;
   if (inc.from && y < inc.from) return false;
@@ -68,7 +78,7 @@ export function rollIncident(s, rng, seasons = 1) {
 function binding(s, b) {
   const names = b.who.map((id) => rawMember(s, id)?.name ?? 'someone');
   const shorts = b.who.map((id) => rawMember(s, id)?.short ?? 'him');
-  return { ...b, names, shorts, countyName: countyName(b.county) };
+  return { ...b, names, shorts, countyName: countyName(b.county), sheriff: s.law?.sheriffs?.[b.county]?.name ?? 'the sheriff' };
 }
 
 /** Words for what an option does, from its effects. */
@@ -99,6 +109,10 @@ export function stakes(effects, b) {
     if (k === 'restart') out.push('the quiet years start again');
     if (k === 'exposed') out.push('more chance of being recognised this season');
     if (k === 'childRisk') out.push(`a ${Math.round(v * 100)}% chance you lose the child`);
+    if (k === 'lieutenant') out.push('he becomes your lieutenant: he can lead a second crew and takes a double share');
+    if (k === 'away') out.push(`he is away ${v === 1 ? 'a season' : `${v} seasons`}`);
+    if (k === 'quitChance') out.push(`a ${Math.round(v * 100)}% chance he quits and takes a friend`);
+    if (k === 'killSheriff') out.push(`Sheriff ${b.sheriff} is killed; the next man starts with a grudge`);
     if (k === 'chance') out.push(`${Math.round(v.p * 100)}%: ${stakes(v.win, b).join(', ')}; otherwise ${stakes(v.lose, b).join(', ') || 'nothing'}`);
   }
   return out;
@@ -130,6 +144,7 @@ export function answer(s, optionId, rng) {
   const b = binding(s, s.incident.bind);
   const lines = [`${inc.title}: ${opt.label}.`];
   apply(s, effects, b, rng, lines);
+  if (inc.story) { const g = rawMember(s, s.incident.bind.who[0]); if (g) g.storyDone = true; }
   s.incident = null;
   s.log.push({ t: s.t, kind: 'gang', title: inc.title, text: lines.slice(1).join(' ') || `${opt.label}.` });
   return lines;
@@ -181,6 +196,19 @@ function apply(s, e, b, rng, lines) {
         else lines.push('The fever breaks.');
         break;
       }
+      case 'lieutenant': s.lieutenant = b.who[0]; lines.push(`${b.names[0]} is your lieutenant.`); break;
+      case 'away': { const g = rawMember(s, b.who[0]); if (g && g.status === 'active') { g.status = 'away'; g.returnT = s.t + v; if (s.lieutenant === g.id) s.lieutenant = null; } break; }
+      case 'quitChance': {
+        if (!rng.chance(v)) { lines.push('He swallows it.'); break; }
+        const g = rawMember(s, b.who[0]);
+        if (!g || g.status !== 'active') break;
+        g.status = 'gone'; g.leftT = s.t; g.loyalty = Math.max(0, g.loyalty - 10); g.stage = Math.max(g.stage, 1);
+        const friend = followers(s).filter((m) => m.kin !== 'family').sort((x, y) => x.loyalty - y.loyalty)[0];
+        if (friend) { const fg = rawMember(s, friend.id); fg.status = 'gone'; fg.leftT = s.t; fg.stage = Math.max(fg.stage, 1); }
+        lines.push(`${b.names[0]} saddles up and rides off${friend ? `, and ${friend.name} goes with him` : ''}.`);
+        break;
+      }
+      case 'killSheriff': { const ev = []; sheriffKilled(s, b.county, rng, ev); lines.push(...ev.map((e) => e.text)); break; }
       case 'chance': {
         const win = rng.chance(v.p);
         lines.push(win ? v.winText : v.loseText);

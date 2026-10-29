@@ -23,7 +23,7 @@ export const CONFIG = {
   retireNeedPurse: 5000,
   stake: 300, // what a man expects to go home on
   retireNeedCover: 60,
-  retireSeasons: 10, // quiet seasons before the world forgets you...
+  retireSeasons: 9, // quiet seasons before the world forgets you...
   retireSeasonsPerLegend: 10, // ...plus one more for every 10 points of peak legend
 
   // safe houses
@@ -54,6 +54,22 @@ export const CONFIG = {
   incidentRiding: 0.3, // chance something asks a question in a season while riding
   incidentRetired: 0.35, // ...and in a season of the quiet years
   incidentGap: [2, 3], // seasons at least between questions: riding, retired
+  // the law
+  sheriffSkillPosse: 4, // posse strength per point of a sheriff's skill, in his county
+  grudgeJob: 20, // a sheriff's grudge when you rob his county...
+  grudgeKill: 30, // ...more for a killing there
+  grudgeFade: 5, // a season
+  grudgeHunt: 60, // at this he will not take money, and he rides after you
+  huntHeat: 10, // heat a season where you hide, when a hunting sheriff is near
+  electionLoss: 0.25, // a sitting sheriff loses an election this often...
+  backCost: 300, // backing a candidate
+  backSwing: 0.3, // ...plus this when you back his rival; and the rival is this much likelier friendly
+  detSkillOps: 0.2, // Pinkerton operations, per point of the lead operative's skill, when he is in your county
+  detReplace: 2, // seasons before the agency sends a new man
+  sheriffKillGrudge: 40, // the grudge the next sheriff starts with
+  lieutenantJobs: 3,
+  goneSourReward: 2000, // a man who left angry turns sour, broke, once the reward passes this...
+  goneSourRewardGood: 5000, // ...one who left on good terms only past this // jobs a man needs behind him before the others will follow him
   recruitOffers: 2, // most new men looking for you in a season
   offerLife: 2, // seasons an offer stands
 

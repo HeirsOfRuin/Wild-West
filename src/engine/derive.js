@@ -8,16 +8,18 @@
 
 import { ALL_TARGETS, NORTHFIELD, KINDS, COUNTIES } from '../data/world.data.js';
 import { incidentView } from './incidents.js';
+import { lawPosse, backOption } from './law.js';
+import { LEANS } from '../data/law.data.js';
 import { K, yearOf, dateOf, intelValid, believedGuard, believedFight, cashOf, modActive } from './state.js';
 import { targetDef, targetOpen, hideouts, hideoutCounty, freshHorses } from './job.js';
-import { members, active, followers, mood, recruitOptions } from './gang.js';
+import { members, active, followers, mood, recruitOptions, lieutenantOption } from './gang.js';
 import { gearOptions, houseOptions, bribeOption, doctorOption, marryProblem, assetOptions, hushOption } from './outfit.js';
 import { scoutProblem, letterProblem, lieLowOptions, coverOptions } from './season.js';
 import { informChance, recognitionChance, COVER_COUNTY } from './pressure.js';
 import { retireProblem, familyAlive } from './ending.js';
 import {
   crewStats, planProblem, alarmChance, vaultPower, vaultNeed, takeFraction, insideKillChance,
-  townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, band, legendGain,
+  townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, band, legendGain, shareCount,
 } from './odds.js';
 
 const clamp3 = (x) => Math.max(0, Math.min(3, x));
@@ -87,8 +89,9 @@ export function forecast(s, plan) {
       for (const m of list) { const h = pA * hitChance(T, EXPOSURE[role]); none *= 1 - h; per.push({ id: m.id, h }); }
     }
     const killedP = 1 - (1 - kill) * (1 - by);
-    const posse = (alarm) => killedP * posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed: true })
-      + (1 - killedP) * posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed: false });
+    const law = lawPosse(s, def.county);
+    const posse = (alarm) => killedP * posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed: true, law })
+      + (1 - killedP) * posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed: false, law });
     const Q = pA * posse(true) + (1 - pA) * posse(false);
     // Fates as job.js deals them: a man hit in the street is killed 30% (you 20%),
     // and if the horses are short half the rest are left behind; caught on the
@@ -98,9 +101,10 @@ export function forecast(s, plan) {
     const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: expWounded, far: !!def.far, fresh: plan.hideout ? freshHorses(s, plan.hideout) : 0 });
     const take = cash * frac * 0.925 * (1 - 0.3 * pCatch);
     const roadLoss = (def.far ? 0.45 : 0.25) * 0.7;
-    const leader = per.find((p) => p.id === 'jesse');
+    const leaderId = st.all.find((m) => m.leader)?.id;
+    const leader = per.find((p) => p.id === leaderId);
     const leaderRisk = (leader ? leader.h * (0.2 + 0.8 * behind) : 0) + pCatch * roadLoss;
-    const lossEach = per.filter((p) => p.id !== 'jesse').map((p) => p.h * (0.3 + 0.7 * behind) + pCatch * roadLoss);
+    const lossEach = per.filter((p) => p.id !== leaderId).map((p) => p.h * (0.3 + 0.7 * behind) + pCatch * roadLoss);
     const legend = legendGain({ approach: plan.approach, loot: take, killed: killedP > 0.5, far: !!def.far }) + 3 * killedP - (killedP > 0.5 ? 3 : 0);
     return { pA, take, kill: killedP, hit: 1 - none, pCatch, leaderRisk, losses: lossEach.reduce((a, b) => a + b, 0), legend };
   };
@@ -115,8 +119,9 @@ export function forecast(s, plan) {
     mid: { alarm: mid('pA'), take: mid('take'), kill: mid('kill'), hit: mid('hit'), catch: mid('pCatch'), leaderRisk: mid('leaderRisk'), losses: mid('losses'), legend: mid('legend') },
     shareEach: 0,
   };
-  const others = st.all.filter((m) => !m.leader).length;
-  const shares = others + 2 + (plan.cut === 'leader' ? 1 : 0);
+  const othersList = st.all.filter((m) => !m.leader);
+  const shares = shareCount({ others: othersList.length, lieutenant: othersList.some((m) => m.id === s.lieutenant),
+    meRiding: st.all.some((m) => m.leader), leaderCut: plan.cut === 'leader' });
   out.shareEach = Math.round(out.mid.take / shares);
   out.words = {
     alarm: bandRange(out.alarm), kill: bandRange(out.kill), hit: bandRange(out.hit), catch: bandRange(out.catch),
@@ -142,6 +147,13 @@ export function view(s) {
     married: s.married, marry: marryProblem(s), family: s.family.map((f) => ({ ...f })),
     houseOptions: houseOptions(s),
     incident: incidentView(s),
+    law: s.law ? {
+      sheriffs: Object.fromEntries(Object.entries(s.law.sheriffs).map(([c, sh]) => [c, { ...sh, leanWord: LEANS[sh.lean].word,
+        hunting: sh.grudge >= K(s, 'grudgeHunt'), grudgeWord: sh.grudge >= K(s, 'grudgeHunt') ? 'hunting you' : sh.grudge >= 30 ? 'a grudge' : sh.grudge > 0 ? 'annoyed' : 'none',
+        back: backOption(s, c) }])),
+      detective: s.law.detective ? { ...s.law.detective } : null,
+      past: s.law.past.slice(),
+    } : null,
     bribe: Object.fromEntries(COUNTIES.map((c) => [c.id, bribeOption(s, c.id)])),
     mods: {
       panic: modActive(s, 'bankCash'), grange: modActive(s, 'symTrainX'), strike: modActive(s, 'strike'),
@@ -153,8 +165,10 @@ export function view(s) {
       base: m.base, gear: { ...m.gear }, rel: m.rel, pitch: m.pitch, jobs: m.jobs || 0,
       traits: m.traits, kin: m.kin, mood: mood(m), pocket: m.pocket, wounded: m.wounded, suspected: m.suspected,
       rode: m.rode, outfit: gearOptions(s, m.id), doctor: doctorOption(s, m.id),
+      story: m.storyDone ? null : m.story, lieutenant: s.lieutenant === m.id, makeLt: lieutenantOption(s, m.id),
     })),
-    gone: members(s).filter((m) => m.status !== 'active' && !m.leader).map((m) => ({ id: m.id, name: m.name, status: m.status, hush: hushOption(s, m.id) })),
+    gone: members(s).filter((m) => m.status !== 'active' && !m.leader).map((m) => ({ id: m.id, name: m.name, status: m.status, hush: hushOption(s, m.id), returnT: m.returnT })),
+    lieutenant: s.lieutenant,
     assets: assetOptions(s),
     recruits: recruitOptions(s),
     actions: {

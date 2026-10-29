@@ -10,6 +10,7 @@ import { COUNTIES } from '../data/world.data.js';
 import { K, yearOf } from './state.js';
 import { followers, nudge, nameOf, canBetray } from './gang.js';
 import { loseHouse } from './outfit.js';
+import { detectiveFactor, detectiveKilled } from './law.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const COVER_COUNTY = { kc: 'jackson', stjoe: 'buchanan', nashville: null };
@@ -75,7 +76,7 @@ export function seasonPressure(s, ctx, rng, events) {
     if (ctx.coverPlace === 'nashville') decay = K(s, 'pinkDecayCoverAway');
     else if (ctx.coverPlace) decay = K(s, 'pinkDecayCoverHome');
     s.pinkerton = clamp(s.pinkerton * decay + s.legend / 25, 0, 100);
-    if (rng.chance(s.pinkerton / K(s, 'pinkOpScale'))) pinkertonOperation(s, ctx, rng, events);
+    if (rng.chance(Math.min(0.9, (s.pinkerton / K(s, 'pinkOpScale')) * detectiveFactor(s, whereCounty)))) pinkertonOperation(s, ctx, rng, events);
   }
   if (s.outcome) return;
 
@@ -153,17 +154,18 @@ function pinkertonOperation(s, ctx, rng, events) {
     const g = s.gang.find((x) => x.id === m.id);
     g.approached = true;
     nudge(s, m.id, -8);
-    events.push({ kind: 'warn', text: 'A stranger with a soft voice has been buying drinks in the saloons where your men drink. Nobody remembers who he talked to.' });
+    events.push({ kind: 'warn', text: `A stranger with a soft voice${s.law?.detective ? ` (${s.law.detective.name}'s man)` : ''} has been buying drinks in the saloons where your men drink. Nobody remembers who he talked to.` });
     return;
   }
   const county = ctx.where === 'farm' ? s.home : ctx.where;
   if (county && s.sym[county] >= 60) {
     s.pinkerton = clamp(s.pinkerton + 10, 0, 100);
     s.reward += 1000;
-    events.push({ kind: 'warn', text: 'A Pinkerton man hired on as a farmhand near your hideout. He was found on a road with his hands tied and a bullet in him. Nobody in the county saw a thing.' });
+    const dead = s.law?.detective?.county === county ? detectiveKilled(s) : null;
+    events.push({ kind: 'warn', text: `${dead ? `${dead} of the Pinkerton agency` : 'A Pinkerton man'} hired on as a farmhand near your hideout. He was found on a road with his hands tied and a bullet in him. Nobody in the county saw a thing.` });
   } else if (county) {
     s.heat[county] = Math.min(100, s.heat[county] + 30);
-    events.push({ kind: 'warn', text: `A detective has found the right road in ${COUNTIES.find((c) => c.id === county).name} County. The local sheriff has company.` });
+    events.push({ kind: 'warn', text: `${s.law?.detective?.name ?? 'A detective'} has found the right road in ${COUNTIES.find((c) => c.id === county).name} County. The local sheriff has company.` });
   } else if (ctx.coverPlace) {
     s.cover.level = Math.max(0, s.cover.level - 25);
     events.push({ kind: 'warn', text: 'A detective has been asking at the boarding houses about men who pay in gold. Your landlady mentioned it.' });

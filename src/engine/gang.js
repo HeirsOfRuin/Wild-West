@@ -171,6 +171,15 @@ export function seasonLoyalty(s, ctx, rng) {
   }
   const L = raw(s, 'me');
   if (L.wounded > 0) L.wounded -= 1;
+  // Men who were away come back, in time for the next season.
+  for (const g of s.gang) {
+    if (g.status === 'away' && s.t + 1 >= g.returnT) {
+      g.status = 'active';
+      s.log.push({ t: s.t, kind: 'gang', text: `${g.name} is back.` });
+    }
+  }
+  // A lieutenant who is gone is no lieutenant.
+  if (s.lieutenant && raw(s, s.lieutenant)?.status !== 'active' && raw(s, s.lieutenant)?.status !== 'away') s.lieutenant = null;
 }
 
 // ---- betrayal ----------------------------------------------------------------
@@ -192,7 +201,10 @@ export function seasonBetrayal(s, ctx, rng, events) {
     if (m.status === 'gone') {
       // A man gone home lives on what he took with him; when it runs out, the reward looks better.
       g.pocket = Math.max(0, g.pocket - K(s, 'livingCost'));
-      if (g.pocket === 0 && s.reward > 2000) g.loyalty = Math.max(0, g.loyalty - 3);
+      // A man who left angry sours as soon as his money runs out; one who left with
+      // your blessing only when he is broke and the reward is too big to ignore.
+      const bitter = g.stage >= 1 || g.loyalty < 50;
+      if (g.pocket === 0 && s.reward > (bitter ? K(s, 'goneSourReward') : K(s, 'goneSourRewardGood'))) g.loyalty = Math.max(0, g.loyalty - 3);
     }
     const greedy = m.traits.includes('greedy') ? 1.3 : 1;
     const amb = m.traits.includes('ambitious') ? 1.6 : 1;
@@ -241,6 +253,28 @@ export function seasonBetrayal(s, ctx, rng, events) {
       }
     }
   }
+}
+
+// ---- a lieutenant -------------------------------------------------------------
+
+export function lieutenantOption(s, id) {
+  const g = raw(s, id);
+  let lock = null;
+  if (!g || g.status !== 'active' || g.leader) lock = 'He is not riding with you.';
+  else if (s.lieutenant === id) lock = 'He is your lieutenant.';
+  else if ((g.jobs || 0) < K(s, 'lieutenantJobs')) lock = `Men follow a man they have seen work: ${K(s, 'lieutenantJobs')} jobs (he has ${g.jobs || 0}).`;
+  return { id, lock };
+}
+
+/** Name a man your lieutenant: he can lead a second crew and takes a double share. */
+export function makeLieutenant(s, id) {
+  const o = lieutenantOption(s, id);
+  if (o.lock) throw new Error(o.lock);
+  const old = s.lieutenant && raw(s, s.lieutenant);
+  if (old) nudge(s, old.id, -10);
+  s.lieutenant = id;
+  nudge(s, id, 10);
+  s.log.push({ t: s.t, kind: 'gang', text: `${raw(s, id).name} is your lieutenant${old ? `, in place of ${old.name}, who takes it badly` : ''}.` });
 }
 
 // ---- the rise ----------------------------------------------------------------

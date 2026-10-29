@@ -86,10 +86,10 @@ export function bystanderChance(approach, T) {
 }
 
 /** The posse that forms behind you, 0-100. */
-export function posseStrength({ alarm, fight, guard, heat, kind, killed }) {
+export function posseStrength({ alarm, fight, guard, heat, kind, killed, law = 0 }) {
   return clamp(
     (alarm ? 20 + 12 * fight : 5 + 4 * fight) + guard * 3 + heat * 0.3
-      + (kind === 'train' ? 10 : 0) + (killed ? 15 : 0),
+      + (kind === 'train' ? 10 : 0) + (killed ? 15 : 0) + law,
     0, 100,
   );
 }
@@ -106,6 +106,16 @@ export function catchChance({ Q, symFrom, symTo, horseSkill, wounded, far, fresh
 /** Legend from a job: boldness, money, blood. Read by the resolver and the forecast. */
 export function legendGain({ approach, loot, killed, far }) {
   return (approach === 'bold' ? 8 : 4) + loot / 2500 + (killed ? 3 : 0) + (far ? 10 : 0) - (loot === 0 ? 7 : 0);
+}
+
+/**
+ * How many shares a take is cut into: one a rider, a second for the lieutenant,
+ * one for the gang's purse, and yours (two if you took a double). You take your
+ * share as the man who planned it even when the second crew rides without you.
+ * The resolver and the forecast both use this.
+ */
+export function shareCount({ others, lieutenant, meRiding, leaderCut }) {
+  return others + (lieutenant ? 1 : 0) + 1 + 1 + (meRiding && leaderCut ? 1 : 0);
 }
 
 /** Words for a probability, so the screen shows judgement, not arithmetic. */

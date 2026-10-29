@@ -13,7 +13,9 @@ import { members } from '../src/engine/gang.js';
 // off to measure what the money buys.
 const SPEND = { outfit: true, houses: true, bribes: true, endgame: true };
 export const POLICIES = {
-  careful: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
+  careful: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 5500, letters: true, give: true, ...SPEND, second: false },
+  // The same player, who names a lieutenant and runs a second crew whenever it pays before 1874.
+  twocrews: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 5500, letters: true, give: true, ...SPEND },
   noscout: { risk: 1, scout: false, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
   quiet: { risk: 1, scout: true, approach: 'quiet', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
   bold: { risk: 1, scout: true, approach: 'bold', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND },
@@ -22,14 +24,14 @@ export const POLICIES = {
   stayer: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 1e9, letters: true, give: true, ...SPEND },
   // The exploit hunt: marry at once, rob until $6,000, then quit (from 1867).
   quickout: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 9999, retirePurse: 6000, windFrom: 1867, marryAt: 1866, letters: false, give: true, ...SPEND },
-  noendgame: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, ...SPEND, endgame: false },
+  noendgame: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 5500, letters: true, give: true, ...SPEND, endgame: false },
   plain: { risk: 1, scout: true, approach: 'any', jobEvery: 1, retireAt: 1878, retirePurse: 9000, letters: true, give: true, outfit: false, houses: false, bribes: false },
   hermit: { risk: 1, scout: false, approach: 'any', jobEvery: 99, never: true, retireAt: 9999, retirePurse: 1e9, letters: false, give: false },
 };
 
 /** Candidate crews for a target: sizes, inside counts, approaches. */
-function candidatePlans(s, v, target, pol) {
-  const avail = v.gang.filter((m) => m.wounded === 0 || m.leader);
+function candidatePlans(s, v, target, pol, pool = null, headId = 'me') {
+  const avail = (pool || v.gang).filter((m) => m.wounded === 0 || m.id === headId);
   const hides = hideouts(s, targetDef(target)).filter((h) => !h.lock);
   if (!hides.length) return [];
   const hs = (h) => (s.sym[h.id === 'farm' ? s.home : h.id] ?? 0) + (h.own ? 20 : 0);
@@ -37,9 +39,11 @@ function candidatePlans(s, v, target, pol) {
   const plans = [];
   const approaches = pol.approach === 'any' ? ['quiet', 'bold'] : [pol.approach];
   for (let n = 3; n <= Math.min(avail.length, 7); n++) {
-    // Leader plus the n-1 best-rounded others.
-    const others = avail.filter((m) => !m.leader).sort((a, b) => (b.gun + b.nerve + b.horse) - (a.gun + a.nerve + a.horse)).slice(0, n - 1);
-    const crewMen = [avail.find((m) => m.leader), ...others];
+    // The man in charge plus the n-1 best-rounded others.
+    const head = avail.find((m) => m.id === headId);
+    if (!head) return plans;
+    const others = avail.filter((m) => m.id !== headId).sort((a, b) => (b.gun + b.nerve + b.horse) - (a.gun + a.nerve + a.horse)).slice(0, n - 1);
+    const crewMen = [head, ...others];
     if (crewMen.length < n) continue;
     const holdersNeeded = Math.max(1, Math.ceil(n / 4));
     for (let k = 1; k <= Math.min(3, n - holdersNeeded); k++) {
@@ -59,7 +63,7 @@ function utility(s, f, pol) {
   if (f.problem) return -Infinity;
   const m = f.mid;
   // Dollars against blood: a killing costs sympathy and the reward; a lost man costs the gang.
-  return m.take + 150 * m.legend - pol.risk * (m.leaderRisk * 150000 + m.losses * 3000 + m.kill * 3000 + m.catch * 800);
+  return m.take + 150 * m.legend - pol.risk * (m.leaderRisk * (pol.lifeValue ?? 60000) + m.losses * 3000 + m.kill * 3000 + m.catch * 800);
 }
 
 function bestPlan(s, v, pol) {
@@ -125,9 +129,15 @@ export function step(s, polName = 'careful') {
   if (sus) return { type: 'dismiss', id: sus.id };
   const rec = v.recruits.filter((r) => !r.lock).sort((a, b) => (b.gun + b.nerve + b.horse) - (a.gun + a.nerve + a.horse))[0];
   if (rec && v.gang.length < 7 && !windDown) return { type: 'recruit', id: rec.id };
+  // A lieutenant, once a man has earned it: he can lead a second crew.
+  if (pol.second !== false && !s.lieutenant && !windDown) {
+    const cand = v.gang.filter((m) => !m.leader && !m.makeLt.lock).sort((x, y) => (y.gun + y.nerve) - (x.gun + x.nerve))[0];
+    if (cand) return { type: 'lieutenant', id: cand.id };
+  }
   // Spending: a reserve first, then the outfit, then houses, then sheriffs.
   if (!windDown) {
-    const reserve = 1200;
+    // From 1872 a man who means to quit saves for it; before that he spends on the outfit.
+    const reserve = y >= 1872 ? 6000 : 1200;
     const hurt = v.gang.find((m) => !m.doctor.lock);
     if (hurt && s.purse > 600) return { type: 'doctor', id: hurt.id };
     if (pol.outfit) {
@@ -157,7 +167,25 @@ export function step(s, polName = 'careful') {
       if (best && !best.f.scouted && !best.t.scoutLock) return { type: 'scout', target: best.t.id };
     }
     const best = bestPlan(s, v, pol);
-    if (best && (pol.biggest || best.u > 300)) return best.p;
+    if (best && (pol.biggest || best.u > 300)) {
+      // A second crew under the lieutenant, from the men left behind, on another target.
+      // Two crews while building money; once quitting is in view the extra heat and reward are not worth it.
+      if (pol.second !== false && y < 1874 && s.lieutenant && v.gang.some((m) => m.id === s.lieutenant) && !best.p.crew.some((c) => c.id === s.lieutenant)) {
+        const left = v.gang.filter((m) => !m.leader && !best.p.crew.some((c) => c.id === m.id));
+        let two = null;
+        for (const t of targetList(s)) {
+          if (t.lock || t.id === best.p.target || t.heat >= 60) continue;
+          for (const p of candidatePlans(s, v, t.id, pol, left, s.lieutenant)) {
+            const f = forecast(s, p);
+            if (f.problem) continue;
+            const u = f.mid.take - pol.risk * (f.mid.losses * 3000 + f.mid.kill * 3000 + f.mid.catch * 800);
+            if (!two || u > two.u) two = { p, u };
+          }
+        }
+        if (two && two.u > 800) return { ...best.p, second: { target: two.p.target, crew: two.p.crew, approach: two.p.approach, hideout: two.p.hideout } };
+      }
+      return best.p;
+    }
   }
 
   // Lie low where it is safest.

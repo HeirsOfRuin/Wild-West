@@ -2,7 +2,7 @@
 // comes from derive.js (view, forecast, targetList) or the engine's own state.
 
 import { newGame, dateOf, yearOf, SAVE_KEY, serialize, deserialize, toCode, fromCode, K } from '../engine/state.js';
-import { act } from '../engine/season.js';
+import { act, secondProblem } from '../engine/season.js';
 import { view, targetList, forecast, hideouts, band } from '../engine/derive.js';
 import { targetDef } from '../engine/job.js';
 import { retireNeeded } from '../engine/ending.js';
@@ -83,6 +83,7 @@ function paper(r) {
     <div class="masthead">THE LIBERTY TRIBUNE · ${dateOf(r.t).toUpperCase()}</div>
     <div class="headline">${esc(j ? j.headline : r.title)}</div>
     ${j ? j.beats.map((b) => `<p>${esc(b)}</p>`).join('') : ''}
+    ${j?.second ? `<div class="headline" style="font-size:16px">ALSO: ${esc(j.second.headline)}</div>${j.second.beats.map((b) => `<p>${esc(b)}</p>`).join('')}` : ''}
     ${events(r.events)}
   </article>`;
 }
@@ -255,6 +256,7 @@ function jobScreen(v) {
       <div class="seg"><button data-act="cut" data-v="even" aria-pressed="${plan.cut === 'even'}">Even shares</button><button data-act="cut" data-v="leader" aria-pressed="${plan.cut === 'leader'}">A double share for you</button></div>
       <p class="small">Every rider gets a share, you get one and the gang's purse one. A double share for you costs every rider's goodwill.</p>
     </div>
+    ${secondCrewCard(v, plan, def)}
     <div class="card forecast"><h3>As far as you can judge${f.scouted ? '' : ' (not scouted)'}</h3>
       <div class="line"><span>The alarm goes up first</span><span>${f.words.alarm}</span></div>
       <div class="line"><span>Somebody is killed (cashier or townsman)</span><span>${f.words.kill}</span></div>
@@ -264,8 +266,52 @@ function jobScreen(v) {
       <div class="line"><span>Likely take</span><span>${$(f.take[0])}${Math.round(f.take[0]) === Math.round(f.take[1]) ? '' : `–${$(f.take[1])}`}</span></div>
       <div class="line"><span>A share, about</span><span>${$(f.shareEach)}</span></div>
       ${lockLine(f.problem)}
-      <button class="btn danger block" data-act="ride" ${f.problem ? 'disabled' : ''}>Ride</button>
+      ${lockLine(f.problem || secondLock(full))}
+      <button class="btn danger block" data-act="ride" ${f.problem || secondLock(full) ? 'disabled' : ''}>Ride${U.plan2 ? ' (both crews)' : ''}</button>
     </div>`;
+}
+
+/** The second crew's plan as the engine takes it, or null. */
+function secondPlan() {
+  if (!U.plan2) return null;
+  const crew = Object.entries(U.plan2.crew).filter(([id, r]) => r !== 'stay' && U.plan.crew[id] === 'stay').map(([id, role]) => ({ id, role }));
+  return { target: U.plan2.target, crew, approach: U.plan2.approach, hideout: U.plan2.hideout };
+}
+function secondLock(full) {
+  const b = secondPlan();
+  if (!b) return null;
+  const why = secondProblem(S, { ...full, second: b });
+  if (why) return why;
+  const f2 = forecast(S, { type: 'job', ...b, cut: 'even' });
+  return f2.problem ? `Second crew: ${f2.problem}` : null;
+}
+
+function secondCrewCard(v, plan, def) {
+  const lt = v.gang.find((m) => m.id === v.lieutenant);
+  if (!lt) return '';
+  if (plan.crew[lt.id] !== 'stay') return `<p class="small">Leave ${esc(lt.short)} out of this crew and he can lead a second one on another target this season.</p>`;
+  if (!U.plan2) return `<button class="btn secondary block" data-act="second">Send a second crew under ${esc(lt.short)}</button>`;
+  const p2 = U.plan2;
+  const targets = targetList(S).filter((t) => !t.lock && t.id !== def.id);
+  const def2 = targetDef(p2.target);
+  const hides = hideouts(S, def2);
+  const men = v.gang.filter((m) => !m.leader && plan.crew[m.id] === 'stay');
+  const role = (m, r, label) => `<button data-act="role2" data-id="${m.id}" data-role="${r}" aria-pressed="${(p2.crew[m.id] || 'stay') === r}">${label}</button>`;
+  const b = secondPlan();
+  const f2 = forecast(S, { type: 'job', ...b, cut: 'even' });
+  return `<div class="card second"><div class="row"><h3>Second crew, under ${esc(lt.name)}</h3><button class="btn small secondary" data-act="second">Call it off</button></div>
+    <p class="small">The same season, another target. ${esc(lt.short)} stands in your place: if it goes wrong, you are not there.</p>
+    <div class="seg">${targets.map((t) => `<button data-act="target2" data-v="${t.id}" aria-pressed="${p2.target === t.id}">${esc(t.name.split(',')[0])}</button>`).join('')}</div>
+    ${men.map((m) => `<div class="man"><div class="row"><span class="name">${esc(m.name)}${m.id === lt.id ? ' <span class="tag">lieutenant</span>' : ''}</span><span class="skills">Gun ${m.gun} · Nerve ${m.nerve} · Horse ${m.horse}</span></div>
+      <div class="seg">${m.id === lt.id ? '' : role(m, 'stay', 'Stays')}${role(m, 'inside', 'Inside')}${role(m, 'street', 'Street')}${role(m, 'horses', 'Horses')}</div></div>`).join('')}
+    <div class="seg" style="margin-top:8px"><button data-act="approach2" data-v="quiet" aria-pressed="${p2.approach === 'quiet'}">Quiet</button><button data-act="approach2" data-v="bold" aria-pressed="${p2.approach === 'bold'}">Bold</button></div>
+    <div class="seg" style="margin-top:6px">${hides.map((h) => `<button data-act="hide2" data-v="${h.id}" aria-pressed="${p2.hideout === h.id}" ${h.lock ? 'disabled' : ''}>${esc(h.name)}</button>`).join('')}</div>
+    <div class="forecast" style="margin-top:8px">
+      <div class="line"><span>The alarm goes up first</span><span>${f2.words.alarm}</span></div>
+      <div class="line"><span>Somebody is killed</span><span>${f2.words.kill}</span></div>
+      <div class="line"><span>A man of this crew is lost</span><span>${band(Math.min(1, f2.mid.losses))}</span></div>
+      <div class="line"><span>Likely take</span><span>${$(f2.take[0])}${Math.round(f2.take[0]) === Math.round(f2.take[1]) ? '' : `–${$(f2.take[1])}`}</span></div>
+    </div></div>`;
 }
 
 function lieLowScreen(v) {
@@ -293,6 +339,15 @@ function coverScreen(v) {
       ${lockLine(o.lock)}<button class="btn block" data-act="cover" data-v="${o.id}" ${o.lock ? 'disabled' : ''}>Live here this season</button></div>`).join('')}`;
 }
 
+// What a man's story looks like from outside, before it happens.
+const STORY_HINT = {
+  lead: 'Watches how you plan. He thinks he could do it.',
+  drink: 'Drinks more than he should.',
+  family: 'Writes home often. Things are hard there.',
+  score: 'Talks about the war as if it were not over.',
+  farm: 'Saves every dollar. He means to buy land one day.',
+};
+
 function gearLine(m) {
   return `${esc(GEAR.horse[m.gear.horse].name)}, ${esc(GEAR.gun[m.gear.gun].name)}`;
 }
@@ -305,8 +360,9 @@ function gangTab(v) {
     ${v.gang.map((m) => `<div class="card"><div class="row"><h3>${esc(m.name)}</h3><span class="small">${m.leader ? 'You' : `${m.mood.word}${m.mood.readable ? '' : ' (hard to read)'}`}</span></div>
       <div class="skills">Gun ${m.base.gun}${m.gear.gun ? `<b>+${m.gun - m.base.gun}</b>` : ''} · Nerve ${m.nerve} · Horse ${m.base.horse}${m.gear.horse ? `<b>+${m.horse - m.base.horse}</b>` : ''}${m.leader ? '' : ` · pocket ${$(m.pocket)}`} · ${m.jobs} job${m.jobs === 1 ? '' : 's'}</div>
       <div class="small">Rides ${gearLine(m)}.</div>
-      <div>${!m.leader && rel(m) ? `<span class="tag">${esc(rel(m))}</span>` : ''}${m.traits.map((t) => `<span class="tag" title="${esc(TRAITS[t])}">${t}</span>`).join('')}${m.wounded ? '<span class="tag bad">wounded</span>' : ''}${m.suspected ? '<span class="tag warn">suspected</span>' : ''}</div>
+      <div>${m.lieutenant ? '<span class="tag warn">lieutenant</span>' : ''}${!m.leader && rel(m) ? `<span class="tag">${esc(rel(m))}</span>` : ''}${m.traits.map((t) => `<span class="tag" title="${esc(TRAITS[t])}">${t}</span>`).join('')}${m.wounded ? '<span class="tag bad">wounded</span>' : ''}${m.suspected ? '<span class="tag warn">suspected</span>' : ''}</div>
       ${m.traits.map((t) => `<div class="small">${t}: ${esc(TRAITS[t])}</div>`).join('')}
+      ${m.story ? `<div class="small"><i>${esc(STORY_HINT[m.story])}</i></div>` : ''}
       <div class="btns">${m.outfit.filter((o) => !o.done).map((o) => `<button class="btn small" data-act="buy" data-id="${m.id}" data-item="${o.item}" ${o.lock ? 'disabled' : ''} title="${esc(o.lock || '')}">Buy ${esc(o.next)} (${$(o.cost)})</button>`).join('')}
         ${m.wounded ? `<button class="btn small" data-act="doctor" data-id="${m.id}" ${m.doctor.lock ? 'disabled' : ''}>A doctor (${$(m.doctor.cost)})</button>` : ''}</div>
       ${m.outfit.filter((o) => !o.done && o.lock).map((o) => `<div class="small">${o.item === 'horse' ? 'Horse' : 'Guns'}: ${esc(o.lock)}</div>`).join('')}
@@ -316,7 +372,9 @@ function gangTab(v) {
         <button class="btn small secondary" data-act="bonus" data-id="${m.id}" ${v.purse < 100 ? 'disabled' : ''}>Pay him ${$(100)}</button>
         <button class="btn small secondary" data-act="dismiss" data-id="${m.id}" data-stake="1" ${v.purse < K(S, 'stake') ? 'disabled' : ''}>Send home with ${$(K(S, 'stake'))}</button>
         <button class="btn small secondary" data-act="dismiss" data-id="${m.id}">Send home with nothing</button>
-        <button class="btn small secondary" data-act="confirm" data-id="${m.id}">Kill him</button></div></details>`}
+        <button class="btn small secondary" data-act="confirm" data-id="${m.id}">Kill him</button>
+        ${m.lieutenant ? '' : `<button class="btn small secondary" data-act="lieutenant" data-id="${m.id}" ${m.makeLt.lock ? 'disabled' : ''}>Make him your lieutenant</button>`}</div>
+        ${!m.lieutenant && m.makeLt.lock ? `<div class="small">${esc(m.makeLt.lock)}</div>` : ''}</details>`}
     </div>`).join('')}
     <h2>Men looking for you</h2>
     ${recruits.length ? recruits.map((r) => `<div class="card ${r.lock ? 'locked' : ''}"><div class="row"><h3>${esc(r.name)}</h3><span class="small">${r.leaves <= 0 ? 'leaves after this season' : 'here two seasons'}</span></div>
@@ -325,8 +383,8 @@ function gangTab(v) {
       <button class="btn small" data-act="recruit" data-id="${r.id}" ${r.lock ? 'disabled' : ''}>Take him on (${$(K(S, 'recruitCost'))})</button></div>`).join('')
       : `<p class="small">Nobody this season. More men come, and better ones, as your legend grows (legend 15 brings one a season, 40 brings two).</p>`}
     ${v.gone.length ? `<h2>Gone</h2><p class="small">Men who went home still know your face and your hiding places. When their money runs out the reward looks better. Money sent now buys back goodwill (${$(K(S, 'hushCost'))}).</p>
-      <ul class="events">${v.gone.map((g) => `<li class="${g.status === 'dead' ? 'bad' : ''}">${esc(g.name)}: ${{ dead: 'dead', captured: 'in prison', gone: 'gone home', turned: 'turned on you' }[g.status]}
-      ${g.status === 'gone' ? `<br><button class="btn small secondary" data-act="hush" data-id="${g.id}" ${g.hush.lock ? 'disabled' : ''}>Send him ${$(g.hush.cost)}</button>` : ''}</li>`).join('')}</ul>` : ''}
+      <ul class="events">${v.gone.map((g) => `<li class="${g.status === 'dead' ? 'bad' : ''}">${esc(g.name)}: ${{ dead: 'dead', captured: 'in prison', gone: 'gone home', turned: 'turned on you', away: 'away' }[g.status]}
+      ${g.status === 'away' ? ` (back in ${dateOf(g.returnT)})` : ''}${g.status === 'gone' ? `<br><button class="btn small secondary" data-act="hush" data-id="${g.id}" ${g.hush.lock ? 'disabled' : ''}>Send him ${$(g.hush.cost)}</button>` : ''}</li>`).join('')}</ul>` : ''}
     <h2>Family</h2>
     <ul class="events">${v.family.map((f) => `<li class="${f.alive ? '' : 'bad'}">${esc(f.name)}, your ${esc(f.rel)}${f.alive ? (f.injured ? ' (maimed)' : '') : ' (dead)'}</li>`).join('')}</ul>
     <p class="small">The family lives ${S.familyAt === 'farm' ? `on the farm in ${esc(COUNTIES.find((c) => c.id === v.home).name)} County` : `with you in ${coverName(S.familyAt)}`}.</p>
@@ -340,9 +398,10 @@ function mapTab(v) {
   const house = v.houseOptions.find((o) => o.county === id);
   const br = v.bribe[id];
   const level = v.houses[id] || 0;
+  const sh = v.law?.sheriffs?.[id];
   return `<h2>Western Missouri</h2>
     ${mapSvg(v, id)}
-    <div class="key"><span><i style="background:var(--sym-hi)"></i>Friendly (55+)</span><span><i style="background:var(--sym-mid)"></i>Wavering</span><span><i style="background:var(--sym-lo)"></i>Hostile (under 35)</span><span><b class="blood">▲</b> posse heat</span><span><b class="blood">⌂</b> the farm</span><span>⌂ your safe house</span><span><b class="blood">★</b> you</span><span>┼┼ railroad</span></div>
+    <div class="key"><span><i style="background:var(--sym-hi)"></i>Friendly (55+)</span><span><i style="background:var(--sym-mid)"></i>Wavering</span><span><i style="background:var(--sym-lo)"></i>Hostile (under 35)</span><span><b class="blood">▲</b> posse heat</span><span><b class="blood">⌂</b> the farm</span><span>⌂ your safe house</span><span><b class="blood">★</b> you</span><span><b class="blood">⚲</b> the Pinkerton man</span><span>┼┼ railroad</span></div>
     <p class="small">Tap a county.</p>
     <div class="card"><div class="row"><h3>${c.name} County</h3><span class="small">${c.town}${id === v.home ? ' · home' : ''}</span></div>
       <p class="small">${esc(c.note)}</p>
@@ -350,7 +409,11 @@ function mapTab(v) {
         <dt>Posse heat</dt><dd>${v.heat[id]}</dd>
         <dt>Informers</dt><dd>${band(v.risks.inform[id])}</dd>
         <dt>To rob</dt><dd>${targetsIn(id).map((t) => esc(t.name.split(',')[0])).join('; ')}</dd>
-        <dt>Your house</dt><dd>${level ? (level === 2 ? 'A hidden room and fresh horses' : 'A safe house') : 'None'}</dd></dl>
+        <dt>Your house</dt><dd>${level ? (level === 2 ? 'A hidden room and fresh horses' : 'A safe house') : 'None'}</dd>
+        ${sh ? `<dt>Sheriff</dt><dd>${esc(sh.name)}, who ${esc(sh.leanWord)}. Skill ${'★'.repeat(sh.skill)}${'☆'.repeat(3 - sh.skill)}. Grudge: ${esc(sh.grudgeWord)}.</dd>` : ''}
+        ${v.law?.detective?.county === id ? `<dt>Pinkerton</dt><dd class="blood">${esc(v.law.detective.name)} is here</dd>` : ''}</dl>
+      ${sh ? `<p class="small" style="margin-top:6px">A sheriff's skill adds to every posse in his county. A friendly one lets the heat die faster and takes half the money. With a grudge of 60 he will not take money at all and he rides after you. Elections: autumn of even years.</p>
+        ${sh.back.lock && /autumn/.test(sh.back.lock) ? '' : `${lockLine(sh.back.lock)}<button class="btn small secondary" data-act="back" data-v="${id}" ${sh.back.lock ? 'disabled' : ''}>Back his rival in the election (${$(sh.back.cost)})</button>`}` : ''}
       ${house.done ? '' : `<p class="small" style="margin-top:8px"><b>${esc(house.name)}</b>: ${esc(house.text)} ${level ? `Informer risk a quarter; posses catch you less often when you run here.` : `Hide here down to sympathy ${K(S, 'houseSym')}, no fee, half the informer risk.`} Then ${$(K(S, 'houseUpkeep'))} a season. Lost if a posse raids it.</p>
         ${lockLine(house.lock)}<button class="btn small" data-act="house" data-v="${id}" ${house.lock ? 'disabled' : ''}>${esc(house.name)} (${$(house.cost)})</button>`}
       <p class="small" style="margin-top:8px"><b>Pay off the sheriff</b>: halves the posse heat. ${$(K(S, 'bribePerHeat'))} a point of heat${c.southern ? '' : ', double in a Union county'}.</p>
@@ -362,6 +425,10 @@ function newsTab(v) {
   const log = [...S.log].reverse().slice(0, 60);
   return `<h2>The record</h2>
     <ul class="events">${log.map((e) => `<li class="${e.kind}"><span class="t">${dateOf(e.t)}${e.title ? ` · ${esc(e.title)}` : ''}</span>${esc(e.text)}</li>`).join('')}</ul>
+    ${v.law ? `<h2>The law</h2>
+    <dl class="kv">${COUNTIES.map((c) => { const sh = v.law.sheriffs[c.id]; return `<dt>${c.name}</dt><dd>${esc(sh.name)}, who ${esc(sh.leanWord)}${sh.hunting ? ' — <b class="blood">hunting you</b>' : sh.grudge >= 30 ? ' — holds a grudge' : ''}</dd>`; }).join('')}
+      ${v.law.detective ? `<dt>Pinkertons</dt><dd>${esc(v.law.detective.name)}, in ${esc(COUNTIES.find((c) => c.id === v.law.detective.county)?.name ?? '')} County</dd>` : ''}</dl>
+    ${v.law.past.length ? `<p class="small">${v.law.past.slice(-3).reverse().map((p) => `${esc(p.name)} (${esc(p.role)}): ${esc(p.fate)}, ${dateOf(p.t)}.`).join(' ')}</p>` : ''}` : ''}
     <h2>The ledger</h2>
     <dl class="kv">${[...S.ledger].reverse().slice(0, 30).map((r) => `<dt>${dateOf(r.t)}</dt><dd>${r.amount > 0 ? '+' : ''}${$(r.amount)} ${esc(r.why)}</dd>`).join('')}</dl>
     <h2>Save</h2>
@@ -381,6 +448,8 @@ function helpScreen() {
   <div class="card"><h3>Sympathy</h3><p>A county under ${C.safeSym} will not hide you. Robbing its bank costs ${C.symBank} (your home county ${C.symHomeBank}). Southern counties like train jobs (+${C.symTrain}). The war fades from ${C.warFadeFrom}.</p></div>
   <div class="card"><h3>Loyalty</h3><p>Hidden. Each man spends ${$(C.livingCost)} a season; broke, idle or frightened men turn. Turning takes seasons and shows signs. Your own kin never sell you.</p></div>
   <div class="card"><h3>The outfit</h3><p>Better horses and guns add half a point a step to a man's riding or shooting, and go where he goes. Safe houses let you hide where friends will not, and fresh horses there shake posses. A paid sheriff halves a county's heat. Men who come through a job unhurt sometimes get better at the work they did. Each man costs ${$(C.keepPerMan)} a season in keep.</p></div>
+  <div class="card"><h3>The law</h3><p>Every county has a sheriff with a name, a skill and a lean. His skill adds to every posse in his county; a friendly one lets heat die faster and takes half the money; a grudge of ${C.grudgeHunt} means he will not take money and rides after you. Robbing his county angers him (+${C.grudgeJob}, +${C.grudgeKill} more for a killing). Elections come every autumn of an even year; backing a rival costs ${$(C.backCost)}. One Pinkerton operative leads the hunt and moves a county a season toward you.</p></div>
+  <div class="card"><h3>Your men</h3><p>Some men have their own story: a man who wants a say, a drinker, trouble at home, an old score, a man saving for land. Each comes to a head once. A man with ${C.lieutenantJobs} jobs behind him can be your lieutenant: a double share, and he can lead a second crew on another target in the same season.</p></div>
   <div class="card"><h3>Plans for after</h3><p>A farm in Tennessee under another name (retiring needs ${Math.round(C.farmPurseShare * 100)}% of the cash; Mr. Howard is believed faster and recognised less there). A business where you live (cover +${C.businessCoverGain} a season, the life costs ${Math.round(C.businessCostCut * 100)}% as much). A lawyer in Jefferson City (the reward fades faster; captured men keep quiet). Money for men who went home buys back their goodwill.</p></div>
   <div class="card"><h3>Ending</h3><p>Killed, captured or betrayed ends it. To win, marry, then retire: the gang gone, cover ${C.retireNeedCover}+, ${$(C.retireNeedPurse)} saved, the family alive; then survive ${C.retireSeasons} quiet seasons, plus one for every ${C.retireSeasonsPerLegend} points of your peak legend. After ${C.endYear} the era is over.</p></div>`;
 }
@@ -490,7 +559,7 @@ app.addEventListener('click', (ev) => {
     case 'done': U.screen = null; break;
     case 'back': U.screen = null; U.target = null; break;
     case 'screen': U.screen = d.screen; U.target = null; U.hide = null; U.give = 0; break;
-    case 'pick': U.target = d.id; U.plan = defaultPlan(); break;
+    case 'pick': U.target = d.id; U.plan = defaultPlan(); U.plan2 = null; break;
     case 'untarget': U.target = null; break;
     case 'scout': return doAct({ type: 'scout', target: d.id });
     case 'role': U.plan.crew[d.id] = d.role; break;
@@ -499,8 +568,36 @@ app.addEventListener('click', (ev) => {
     case 'cut': U.plan.cut = d.v; break;
     case 'ride': {
       const crew = Object.entries(U.plan.crew).filter(([, r]) => r !== 'stay').map(([id, role]) => ({ id, role }));
-      return doAct({ type: 'job', target: U.target, crew, approach: U.plan.approach, hideout: U.plan.hideout, cut: U.plan.cut });
+      const second = secondPlan();
+      U.plan2 = null;
+      return doAct({ type: 'job', target: U.target, crew, approach: U.plan.approach, hideout: U.plan.hideout, cut: U.plan.cut, ...(second ? { second } : {}) });
     }
+    case 'second': {
+      if (U.plan2) { U.plan2 = null; break; }
+      const t2 = targetList(S).find((t) => !t.lock && t.id !== U.target);
+      if (!t2) { U.toast = 'There is no other target open this season.'; break; }
+      const v2 = view(S);
+      const hide = hideouts(S, targetDef(t2.id)).find((h) => !h.lock);
+      const crew = {};
+      for (const m of v2.gang) if (!m.leader && U.plan.crew[m.id] === 'stay') crew[m.id] = 'stay';
+      crew[v2.lieutenant] = 'street';
+      const spare = v2.gang.filter((m) => !m.leader && U.plan.crew[m.id] === 'stay' && m.id !== v2.lieutenant).sort((a, b) => b.nerve - a.nerve);
+      if (spare[0]) crew[spare[0].id] = 'inside';
+      if (spare[1]) crew[spare[1].id] = 'horses';
+      U.plan2 = { target: t2.id, crew, approach: 'quiet', hideout: hide?.id ?? 'farm' };
+      break;
+    }
+    case 'target2': {
+      U.plan2.target = d.v;
+      const h = hideouts(S, targetDef(d.v)).find((x) => !x.lock);
+      U.plan2.hideout = h?.id ?? U.plan2.hideout;
+      break;
+    }
+    case 'role2': U.plan2.crew[d.id] = d.role; break;
+    case 'approach2': U.plan2.approach = d.v; break;
+    case 'hide2': U.plan2.hideout = d.v; break;
+    case 'lieutenant': return doAct({ type: 'lieutenant', id: d.id });
+    case 'back': return doAct({ type: 'back', county: d.v });
     case 'hidepick': U.hide = d.v; break;
     case 'give': U.give = Number(d.v); break;
     case 'lielow': return doAct({ type: 'lielow', at: d.v, give: U.give, seasons: Number(d.n || 1) });

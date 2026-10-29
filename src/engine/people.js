@@ -14,6 +14,16 @@ export const DEFAULT_CREATION = {
 const TRAIT_POOL = ['hothead', 'steady', 'greedy', 'young', 'drinker'];
 
 /** A member record: everything about a man lives in the save. */
+/** A man's own story, or none: see FRAME-DEPTH.md. Drinkers mostly get the drink. */
+export function storyFor(rng, traits, kind) {
+  if (traits.includes('drinker') && rng.chance(0.7)) return 'drink';
+  const pool = [
+    { id: 'lead', weight: 2 }, { id: 'family', weight: 2 }, { id: 'farm', weight: 2 },
+    { id: 'score', weight: ['warfriend', 'veteran'].includes(kind) ? 4 : 1 }, { id: null, weight: 3 },
+  ];
+  return rng.weighted(pool.map((p) => ({ ...p, weight: p.weight }))).id;
+}
+
 export function makeMember(fields) {
   return {
     id: fields.id, name: fields.name, short: fields.short || fields.name.split(' ')[0],
@@ -21,6 +31,7 @@ export function makeMember(fields) {
     gun: fields.gun, nerve: fields.nerve, horse: fields.horse, traits: fields.traits || [],
     gear: { horse: 0, gun: 0 }, pitch: fields.pitch || '',
     loyalty: fields.loyalty ?? 55, pocket: fields.pocket ?? 100, status: 'active', joined: fields.joined ?? 0,
+    story: fields.story ?? null, storyDone: false,
     rode: fields.rode ?? 0, jobs: 0, wounded: 0, stage: 0, approached: false, suspected: false, bonusT: -1, noise: 0,
   };
 }
@@ -38,7 +49,7 @@ export function companionChoices(seed, last) {
     if (k.young) traits.push('young');
     if (r.chance(0.35)) { const t = r.pick(TRAIT_POOL.filter((x) => !traits.includes(x))); traits.push(t); }
     return { id: `c-${k.id}`, kind: k.id, name, rel: k.rel, kin: k.kin ? 'family' : null,
-      gun: g, nerve: n, horse: h, traits, loyalty: k.loyalty, pitch: k.pitch };
+      gun: g, nerve: n, horse: h, traits, loyalty: k.loyalty, pitch: k.pitch, story: storyFor(r, traits, k.id) };
   });
 }
 
@@ -93,7 +104,7 @@ export function recruitOffers(s, rng, n, year, legend, nextId) {
     if (!traits.length && rng.chance(0.3)) traits.push(rng.pick(TRAIT_POOL));
     const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
     out.push({ id: `r${nextId()}`, name: `${first} ${last}`, short: first, gun: roll(gr), nerve: roll(nr), horse: roll(hr),
-      traits, loyalty: rng.range(...k.loyalty), pitch: rng.pick(k.pitch), rel: k.id });
+      traits, loyalty: rng.range(...k.loyalty), pitch: rng.pick(k.pitch), rel: k.id, story: storyFor(rng, traits, k.id) });
   }
   return out;
 }
@@ -112,6 +123,6 @@ export function childName(seed, n, last) {
 export function strangerOffer(rng, id) {
   const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
   return { id, name: `${first} ${last}`, short: first, gun: rng.range(2, 3), nerve: rng.range(2, 3), horse: 2,
-    traits: rng.chance(0.4) ? ['hothead'] : [], loyalty: 68, rel: 'veteran',
+    traits: rng.chance(0.4) ? ['hothead'] : [], loyalty: 68, rel: 'veteran', story: 'score',
     pitch: 'Rode with Bloody Bill. You took him in when he had nowhere to go, and he has not forgotten it.' };
 }

@@ -29,3 +29,20 @@ test('forecast alarm and take match resolved jobs (scouted, 600 jobs)', () => {
     assert.ok(Math.abs(predT - gotT) / gotT < 0.08, `${p.target}: take forecast ${Math.round(predT / N)} vs ${Math.round(gotT / N)}`);
   }
 });
+
+test('the forecast of your own risk matches what jobs do to you (bold, guarded bank, 1,500 jobs)', () => {
+  const plan = { type: 'job', target: 'kc-bank', approach: 'bold', hideout: 'farm', cut: 'even',
+    crew: [{ id: 'me', role: 'street' }, { id: 'c-brother', role: 'inside' }, { id: 'c-cousin', role: 'horses' }, { id: 'c-warfriend', role: 'inside' }] };
+  let pred = 0, got = 0;
+  const N = 1500;
+  for (let seed = 1; seed <= N; seed++) {
+    let s = newGame(seed * 13);
+    s = act(s, { type: 'scout', target: 'kc-bank' });
+    pred += forecast(s, plan).mid.leaderRisk;
+    const after = act(s, plan);
+    if (after.outcome?.cause === 'job') got += 1;
+  }
+  const p = pred / N, g = got / N;
+  assert.ok(p > 0.01, `forecast leader risk ${p.toFixed(3)} should not be near zero`);
+  assert.ok(Math.abs(p - g) * 100 < 3 * seRate(g, N) + 1, `leader risk forecast ${p.toFixed(3)} vs ${g.toFixed(3)}`);
+});

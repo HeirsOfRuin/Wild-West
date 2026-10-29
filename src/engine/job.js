@@ -3,16 +3,17 @@
 // never a retelling.
 
 import { ALL_TARGETS, NORTHFIELD, KINDS, LINKS, COUNTIES } from '../data/world.data.js';
-import { K, yearOf, trueGuard, trueFight, intelValid, cashOf, modActive } from './state.js';
+import { K, yearOf, trueGuard, trueFight, intelValid, cashOf, modActive, adjacent } from './state.js';
+import { lawPosse, lawAfterJob } from './law.js';
 import { pay } from './money.js';
 import { members, nudge, rawMember, learn } from './gang.js';
 import {
   crewStats, planProblem, alarmChance, vaultPower, vaultNeed, takeFraction, insideKillChance,
-  townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, legendGain,
+  townPower, EXPOSURE, hitChance, bystanderChance, posseStrength, catchChance, legendGain, shareCount,
 } from './odds.js';
 
 export const targetDef = (id) => (id === NORTHFIELD.id ? NORTHFIELD : ALL_TARGETS.find((t) => t.id === id));
-export const adjacent = (a, b) => LINKS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+export { adjacent };
 export const countyName = (id) => COUNTIES.find((c) => c.id === id)?.name ?? 'Minnesota';
 
 /** Where you can ride to after a job at this target, and why not elsewhere. */
@@ -54,7 +55,7 @@ function hitOutcome(rng, isLeader, leftBehind) {
 }
 
 /** Resolve a job. Mutates s; returns the job report. */
-export function runJob(s, plan, rng, events) {
+export function runJob(s, plan, rng, events, { second = false } = {}) {
   const def = targetDef(plan.target);
   if (!def) throw new Error(`No such target: ${plan.target}`);
   const shut = targetOpen(s, def);
@@ -64,7 +65,10 @@ export function runJob(s, plan, rng, events) {
     const m = all.find((x) => x.id === c.id);
     if (!m || m.status !== 'active') throw new Error(`${c.id} is not riding with you.`);
   }
-  if (!plan.crew.some((c) => c.id === 'me')) throw new Error('You ride on every job.');
+  if (second) {
+    if (!s.lieutenant || !plan.crew.some((c) => c.id === s.lieutenant)) throw new Error('A second crew rides under your lieutenant.');
+    if (plan.crew.some((c) => c.id === 'me')) throw new Error('You cannot ride with both crews.');
+  } else if (!plan.crew.some((c) => c.id === 'me')) throw new Error('You ride on every job.');
   const st = crewStats(all, plan.crew);
   const problem = planProblem(st);
   if (problem) throw new Error(problem);
@@ -155,7 +159,7 @@ export function runJob(s, plan, rng, events) {
 
   // 5. The ride to the hideout.
   const killed = cashierKilled || bystanders > 0;
-  const Q = posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed });
+  const Q = posseStrength({ alarm, fight, guard, heat, kind: def.kind, killed, law: lawPosse(s, county) });
   const symTo = s.sym[hideoutCounty(s, plan.hideout)] ?? 0;
   const woundedNow = st.wounded + casualties.filter((c) => c.fate === 'wounded').length;
   const pCatch = catchChance({ Q, symFrom, symTo, horseSkill: st.horseSkill, wounded: woundedNow, far: !!def.far, fresh: freshHorses(s, plan.hideout) });
@@ -209,19 +213,21 @@ export function runJob(s, plan, rng, events) {
   // Money and shares.
   const ridersAlive = st.all.filter((m) => !casualties.some((c) => c.id === m.id && c.fate !== 'wounded'));
   const others = ridersAlive.filter((m) => !m.leader);
-  const shares = others.length + 2 + (plan.cut === 'leader' ? 1 : 0); // a share each, yours, and one for the gang's needs
+  const meRiding = ridersAlive.some((m) => m.leader);
+  const ltRiding = others.some((m) => m.id === s.lieutenant);
+  const shares = shareCount({ others: others.length, lieutenant: ltRiding, meRiding, leaderCut: plan.cut === 'leader' });
   const share = loot > 0 ? Math.floor(loot / shares) : 0;
   if (loot > 0) {
-    pay(s, loot - share * others.length, `${def.name}: your share and the gang's`);
+    pay(s, loot - share * (others.length + (ltRiding ? 1 : 0)), `${def.name}: your share${meRiding ? '' : ' as the man who planned it'} and the gang's`);
     for (const m of others) {
       const g = s.gang.find((x) => x.id === m.id);
-      g.pocket += share;
+      g.pocket += share * (m.id === s.lieutenant ? 2 : 1);
       const greedy = m.traits.includes('greedy') ? 1.5 : 1;
       nudge(s, m.id, Math.min(K(s, 'shareCap'), (share / K(s, 'shareScale')) * greedy) - (plan.cut === 'leader' ? K(s, 'leaderCutPenalty') * greedy : 0));
     }
   }
   beats.push(loot > 0
-    ? `The take: $${loot.toLocaleString('en-US')}. ${others.length ? `$${share.toLocaleString('en-US')} a man${plan.cut === 'leader' ? ', and a double share for you' : ''}.` : ''}`
+    ? `The take: $${loot.toLocaleString('en-US')}. ${others.length ? `$${share.toLocaleString('en-US')} a man${plan.cut === 'leader' ? ', and a double share for you' : ''}${ltRiding ? ', double for your lieutenant' : ''}.` : ''}`
     : 'The take: nothing.');
 
   // Grief and fear.
@@ -251,6 +257,7 @@ export function runJob(s, plan, rng, events) {
       for (const c of COUNTIES) s.sym[c.id] -= K(s, 'symKillAll');
     }
     s.heat[county] = Math.min(100, s.heat[county] + K(s, 'heatJob') + (killed ? K(s, 'heatKill') : 0));
+    lawAfterJob(s, county, killed);
     for (const c of COUNTIES) if (adjacent(c.id, county)) s.heat[c.id] = Math.min(100, s.heat[c.id] + K(s, 'heatNeighbour'));
     // The town learns.
     const t = s.targets[def.id];
@@ -287,7 +294,7 @@ export function runJob(s, plan, rng, events) {
     loot, share, alarm, caught, cashierKilled, bystanders, ambushed, ambushBy,
     casualties, beats, headline, crew: plan.crew.map((c) => ({ ...c })),
   };
-  s.lastJob = report;
+  if (!second) s.lastJob = report;
   // The men who came through unhurt learn (beats added after the report is built, so they print last).
   learn(s, plan.crew, new Set(casualties.map((c) => c.id)), rng, beats);
   return report;
@@ -297,7 +304,7 @@ function headlineFor(def, r) {
   const place = def.far ? 'NORTHFIELD' : (COUNTIES.find((c) => c.id === def.county)?.town ?? '').toUpperCase();
   if (r.gallatin) return `MURDER AT GALLATIN — Cashier Sheets Shot Down in Cold Blood — The Daviess County Savings Robbed`;
   if (def.far && r.lost.length) return `THE NORTHFIELD RAID — Citizens Defend the Bank — Outlaws Shot Down in the Street`;
-  if (r.cashierKilled) return `${place}: ${def.kind === 'train' ? 'EXPRESS MESSENGER' : 'CASHIER'} MURDERED — Bandits Escape With $${r.loot.toLocaleString('en-US')}`;
+  if (r.cashierKilled) return `${place}: ${def.kind === 'train' ? 'EXPRESS MESSENGER' : def.kind === 'stage' ? 'PASSENGER' : 'CASHIER'} MURDERED — Bandits Escape With $${r.loot.toLocaleString('en-US')}`;
   if (r.bystanders) return `${place}: CITIZEN KILLED IN DARING ROBBERY`;
   if (r.loot === 0) return `${place}: ROBBERS FOILED — Bandits Flee Empty-Handed`;
   if (!r.alarm) return `${place}: A QUIET ROBBERY — $${r.loot.toLocaleString('en-US')} Taken Without a Shot`;

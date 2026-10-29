@@ -151,6 +151,42 @@ if (!over) {
   check('Continue restores the same season', t2 === t1, `${t1} -> ${t2}`);
 }
 
+// A second crew, through the screens: give the saved game a lieutenant and ride two jobs.
+if (!over) {
+  await page.evaluate(() => {
+    const k = 'outlaw.save.v1';
+    const st = JSON.parse(localStorage.getItem(k));
+    const men = st.gang.filter((g) => !g.leader && g.status === 'active');
+    if (men.length >= 2) { st.lieutenant = men[0].id; men[0].jobs = 5; st.incident = null; st.purse += 0; }
+    localStorage.setItem(k, JSON.stringify(st));
+  });
+  await page.reload({ waitUntil: 'load' });
+  await page.click('[data-act="continue"]');
+  if (await has('[data-act="done"]')) await page.click('[data-act="done"]');
+  await page.click('[data-tab="season"]');
+  await page.click('[data-screen="job"]');
+  await page.locator('[data-act="pick"]').first().click();
+  // Leave the lieutenant out of the first crew so he can lead the second.
+  const ltId = await page.evaluate(() => globalThis.__outlaw.state.lieutenant);
+  if (ltId) {
+    const stay = page.locator(`[data-act="role"][data-id="${ltId}"][data-role="stay"]`);
+    if (await stay.count()) await stay.click();
+    const send = page.locator('[data-act="second"]');
+    check('the plan offers a second crew under the lieutenant', (await send.count()) > 0);
+    if (await send.count()) {
+      await send.click();
+      await look('second-crew');
+      const ride = page.locator('[data-act="ride"]:not([disabled])');
+      if (await ride.count()) {
+        await ride.click();
+        check('both crews ride and the paper reports both', await has('.paper .headline'), (await page.locator('.paper').innerText()).includes('ALSO:') ? 'second crew reported' : 'second crew not reported');
+      } else {
+        check('a second-crew plan that cannot ride says why', await has('.lock'));
+      }
+    }
+  }
+}
+
 await browser.close();
 server.close();
 console.log(failures ? `\n${failures} check(s) failed. Screenshots in ${SHOTS}` : `\nall checks passed. Screenshots in ${SHOTS}`);

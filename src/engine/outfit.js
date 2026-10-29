@@ -8,6 +8,7 @@ import { K, yearOf } from './state.js';
 import { pay } from './money.js';
 import { rawMember } from './gang.js';
 import { wifeName } from './people.js';
+import { bribeFactor } from './law.js';
 
 const spend = (s, amount, why) => { pay(s, -amount, why); s.stats.spent += amount; };
 
@@ -71,9 +72,11 @@ export function loseHouse(s, county, events) {
 
 export function bribeOption(s, county) {
   const c = COUNTIES.find((x) => x.id === county);
-  const cost = Math.round(s.heat[county] * K(s, 'bribePerHeat') * (c.southern ? 1 : 2));
+  const f = bribeFactor(s, county);
+  const cost = Math.round(s.heat[county] * K(s, 'bribePerHeat') * (c.southern ? 1 : 2) * (f ?? 1));
   let lock = null;
   if (s.heat[county] < 5) lock = 'No posse is looking for you here.';
+  else if (f === null) lock = `Sheriff ${s.law.sheriffs[county].name} wants you, not your money.`;
   else if (s.bribed[county] === s.t) lock = 'He has had his money this season.';
   else if (s.purse < cost) lock = `Costs $${cost}.`;
   return { county, cost, lock };

@@ -60,6 +60,7 @@ function icons(v, id, here, cx, y) {
   if (v.home === id) marks.push((x) => `<rect x="${x - 7}" y="${y + 3}" width="14" height="9" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.3"/><path d="M${x - 9},${y + 3} l9,-7 l9,7z" fill="var(--blood)"/>`);
   const lvl = v.houses[id] || 0;
   if (lvl) marks.push((x) => `<path d="M${x - 8},${y + 4} l8,-7 l8,7 v8 h-16z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.3"/>${lvl >= 2 ? `<rect x="${x - 2}" y="${y + 6}" width="4" height="6" fill="var(--ink)"/>` : ''}`);
+  if (v.law?.detective?.county === id) marks.push((x) => `<circle cx="${x}" cy="${y + 7}" r="6" fill="none" stroke="var(--blood)" stroke-width="2"/><path d="M${x + 4},${y + 11} l5,5" stroke="var(--blood)" stroke-width="2.5"/>`);
   if (here === id) marks.push((x) => `<text x="${x}" y="${y + 12}" text-anchor="middle" font-size="17" style="fill:var(--blood)">★</text>`);
   const w = 22;
   return `<g pointer-events="none">${marks.map((m, i) => m(cx - ((marks.length - 1) * w) / 2 + i * w)).join('')}</g>`;

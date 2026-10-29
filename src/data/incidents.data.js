@@ -22,6 +22,11 @@
 //   exposed         true: recognition this season is doubled
 //   childRisk       chance a sick child dies
 //   chance          { p, win: {effects}, lose: {effects}, winText, loseText }
+//   lieutenant      true: the bound man becomes your lieutenant (he can lead a second crew)
+//   away            seasons the bound man is away (then he comes back)
+//   quitChance      chance the bound man quits in anger, taking his closest friend
+//   killSheriff     true: the bound county's sheriff is killed and replaced
+// An incident with `story` is the bound man's own story; it is told once.
 //   bot             the reference bot's preference (higher first); not an effect
 
 export const INCIDENTS = [
@@ -153,6 +158,66 @@ export const INCIDENTS = [
     options: [
       { id: 'take', label: 'Mark the night', effects: { tip: 'steamboat' }, bot: 2 },
       { id: 'no', label: 'Leave it', effects: {}, bot: 1 },
+    ],
+  },
+
+  // ---- the law -------------------------------------------------------------
+  {
+    id: 'sheriff-hunt', title: 'A sheriff closes in', weight: 5,
+    when: (s, c) => { const k = c.huntingSheriff(); return k ? { county: k } : null; },
+    text: (b) => `Sheriff ${b.sheriff} of ${b.countyName} County and his deputies are watching the fords near your hideout. He knows the house.`,
+    options: [
+      { id: 'ambush', label: 'Wait for him at the ford', effects: { killSheriff: true, legend: 6, reward: 2000, sym: { all: -6 }, heat: { here: 60 } }, bot: 0 },
+      { id: 'slip', label: 'Slip away to another county ($100 to the right people)', effects: { purse: -100, heat: { here: -25 } }, bot: 2 },
+      { id: 'quiet', label: 'Lie still and let him look', effects: { heat: { here: 10 } }, bot: 1 },
+    ],
+  },
+
+  // ---- the men's own stories (each told once) ------------------------------
+  {
+    id: 'story-lead', title: 'He wants a say', weight: 6, story: 'lead',
+    when: (s, c) => { const m = c.storyMan('lead', (x) => x.jobs >= 4 && (x.gun >= 3 || x.nerve >= 3) && !s.lieutenant); return m ? { who: [m] } : null; },
+    text: (b) => `${b.names[0]} has ridden on enough jobs to think he could plan one. He wants to be your second: to lead men when you are elsewhere, and to be paid for it.`,
+    options: [
+      { id: 'yes', label: 'Make him your lieutenant', effects: { lieutenant: true, loyalty: { who: 15 } }, bot: 2 },
+      { id: 'no', label: 'There is one man who gives orders', effects: { loyalty: { who: -12 }, quitChance: 0.4 }, bot: 1 },
+    ],
+  },
+  {
+    id: 'story-drink', title: 'Loose talk', weight: 6, story: 'drink',
+    when: (s, c) => { const m = c.storyMan('drink', (x) => x.jobs >= 1); return m ? { who: [m], county: c.hideCounty || c.homeCounty } : null; },
+    text: (b) => `${b.names[0]} got drunk in a saloon in ${b.countyName} County and told a room full of strangers how much the last job paid.`,
+    options: [
+      { id: 'dry', label: "Dry him out at a cousin's farm for a season ($100)", effects: { purse: -100, away: 1, loyalty: { who: -3 } }, bot: 2 },
+      { id: 'home', label: 'Send him home for good', effects: { leaveIn: 0 }, bot: 1 },
+      { id: 'let', label: 'Let it go this time', effects: { heat: { here: 15 } }, bot: 0 },
+    ],
+  },
+  {
+    id: 'story-family', title: 'Trouble at home', weight: 5, story: 'family',
+    when: (s, c) => { const m = c.storyMan('family', (x) => x.rode >= 8); return m ? { who: [m] } : null; },
+    text: (b) => `${b.names[0]}'s mother is sick and his younger brothers cannot work the place alone. He asks what you want him to do.`,
+    options: [
+      { id: 'money', label: 'Send his family $200', effects: { purse: -200, loyalty: { who: 12 } }, bot: 2 },
+      { id: 'go', label: 'Tell him to go home for a year', effects: { away: 4, loyalty: { who: 8 } }, bot: 1 },
+    ],
+  },
+  {
+    id: 'story-score', title: 'An old score', weight: 5, story: 'score',
+    when: (s, c) => { const m = c.storyMan('score', (x) => x.rode >= 4); return m ? { who: [m], county: c.anyCounty() } : null; },
+    text: (b) => `${b.names[0]} has found the militia captain who burned his family's farm in '63. The man lives in ${b.countyName} County now and goes to church on Sundays.`,
+    options: [
+      { id: 'help', label: 'Ride with him', effects: { legend: 4, heat: { here: 25 }, sym: { here: -4 }, loyalty: { who: 20 } }, bot: 1 },
+      { id: 'no', label: 'The war is over', effects: { loyalty: { who: -15 } }, bot: 2 },
+    ],
+  },
+  {
+    id: 'story-farm', title: 'Enough saved', weight: 6, story: 'farm',
+    when: (s, c) => { const m = c.storyMan('farm', (x) => x.pocket >= 1500); return m ? { who: [m] } : null; },
+    text: (b) => `${b.names[0]} has saved enough to buy a farm in Texas. He wants to go while he is alive to enjoy it.`,
+    options: [
+      { id: 'go', label: 'Let him go with your blessing', effects: { leaveIn: 0, loyalty: { who: 20 } }, bot: 2 },
+      { id: 'stay', label: 'Ask him for one more year', effects: { loyalty: { who: -10 } }, bot: 1 },
     ],
   },
 

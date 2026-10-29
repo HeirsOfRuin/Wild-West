@@ -18,10 +18,11 @@ import { COUNTIES, ALL_TARGETS, NORTHFIELD } from '../data/world.data.js';
 import { CONFIG } from '../data/config.data.js';
 import { K, yearOf, seasonOf, dateOf, lastTurn, rollTarget, cashOf, readTarget } from './state.js';
 import { rollIncident, answer } from './incidents.js';
+import { seasonLaw, backCandidate } from './law.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
-import { runJob, targetDef, targetOpen } from './job.js';
-import { active, followers, member, recruit, dismiss, killMember, bonus, seasonLoyalty, seasonBetrayal, nudge } from './gang.js';
+import { runJob, targetDef, targetOpen, hideouts } from './job.js';
+import { active, followers, member, recruit, dismiss, killMember, bonus, seasonLoyalty, seasonBetrayal, nudge, makeLieutenant } from './gang.js';
 const nudgeKeep = (s, id) => nudge(s, id, -4);
 import { seasonPressure, COVER_COUNTY, COVER_NAME } from './pressure.js';
 import { buyGear, buyHouse, bribe, doctor, marry, loseHouse, buyAsset, hush } from './outfit.js';
@@ -49,6 +50,8 @@ export function act(s0, a) {
     case 'asset': buyAsset(s, a.id); return s;
     case 'answer': answer(s, a.choice, streamFor(s.seed, s.t, `answer:${s.incident?.id}`)); return s;
     case 'hush': hush(s, a.id); return s;
+    case 'back': backCandidate(s, a.county); return s;
+    case 'lieutenant': makeLieutenant(s, a.id); return s;
     case 'job': case 'lielow': case 'cover': case 'retire': case 'wait': case 'rideagain':
       if (s.incident) throw new Error('Something needs an answer first (top of the Season screen).');
       return (a.seasons || 1) > 1 ? stretch(s, a) : seasonAction(s, a);
@@ -151,8 +154,25 @@ function seasonAction(s, a) {
 
   switch (a.type) {
     case 'job': {
+      const why2 = a.second ? secondProblem(s, a) : null;
+      if (why2) throw new Error(why2);
       job = runJob(s, a, streamFor(s.seed, s.t, 'job'), events);
       for (const c of a.crew) ctx.rode.add(c.id);
+      // The second crew rides the same season under your lieutenant.
+      if (a.second && !s.outcome) {
+        // The first job may have closed the second crew's hideout (a killing turns a county).
+        const hides = hideouts(s, targetDef(a.second.target));
+        let hideout = a.second.hideout;
+        if (hides.find((h) => h.id === hideout)?.lock) hideout = hides.find((h) => !h.lock)?.id ?? null;
+        const lt = s.gang.find((g) => g.id === s.lieutenant);
+        if (!hideout || !lt || lt.status !== 'active') {
+          events.push({ kind: 'warn', text: `${lt ? lt.name : 'Your lieutenant'} called off the second job: with the country roused there was nowhere safe to run.` });
+        } else {
+          if (hideout !== a.second.hideout) events.push({ kind: 'warn', text: `With the country roused, ${lt.name}'s crew rode for a different hideout.` });
+          job.second = runJob(s, { ...a.second, hideout, cut: 'even' }, streamFor(s.seed, s.t, 'job2'), events, { second: true });
+          for (const c of a.second.crew) ctx.rode.add(c.id);
+        }
+      }
       ctx.where = a.hideout;
       ctx.home = false;
       ctx.onJob = true;
@@ -259,6 +279,7 @@ function seasonAction(s, a) {
   if (!s.outcome) seasonLoyalty(s, { ...ctx, underCover: !!ctx.coverPlace }, rng, events);
   if (!s.outcome) seasonBetrayal(s, ctx, rng, events);
   if (!s.outcome) seasonPressure(s, ctx, rng, events);
+  if (!s.outcome) seasonLaw(s, ctx, rng, events);
   if (!s.outcome && s.retired) retirementRisk(s, rng, events);
 
   // 6. Sympathy drifts back toward what the county would feel anyway.
@@ -309,6 +330,17 @@ export function baseline(s, c) {
   // A legend raises sympathy where people want a Southern hero; less where they do not.
   const myth = s.legend * (c.southern ? K(s, 'legendSymSouth') : K(s, 'legendSymNorth'));
   return clamp(c.base - (c.southern ? fade : fade / 2) + (c.southern ? s.edwards : 0) + myth, 0, 100);
+}
+
+/** Why a second crew cannot ride with this plan, or null. */
+export function secondProblem(s, a) {
+  const b = a.second;
+  if (!s.lieutenant) return 'You need a lieutenant to lead a second crew.';
+  if (!b.crew?.some((c) => c.id === s.lieutenant)) return 'Your lieutenant leads the second crew.';
+  if (b.crew.some((c) => c.id === 'me')) return 'You cannot ride with both crews.';
+  if (b.crew.some((c) => a.crew.some((x) => x.id === c.id))) return 'A man can ride with one crew.';
+  if (b.target === a.target) return 'The second crew needs a different target.';
+  return null;
 }
 
 // ---- a stretch of quiet seasons in one go ----------------------------------------

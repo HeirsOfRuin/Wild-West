@@ -4,13 +4,14 @@
 // Date.now. Randomness comes from named streams keyed by (seed, season, label),
 // so the save needs no generator state and a reload cannot reroll anything.
 
-import { COUNTIES, ALL_TARGETS } from '../data/world.data.js';
+import { COUNTIES, ALL_TARGETS, LINKS } from '../data/world.data.js';
+import { initLaw } from './law-init.js';
 import { CONFIG } from '../data/config.data.js';
 import { streamFor } from './rng.js';
 import { pay } from './money.js';
 import { DEFAULT_CREATION, creationProblem, companionChoices, makeLeader, makeMember, startingFamily, backgroundOf } from './people.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = 'outlaw.save.v1'; // a contract: never rename
 
 /** A tuning number, with any override this game was started with (ablations). */
@@ -19,6 +20,9 @@ export function K(s, key) {
   if (v === undefined) throw new Error(`Unknown tuning key: ${key}`);
   return v;
 }
+
+/** Two counties share a road for an escape ride. */
+export const adjacent = (a, b) => LINKS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 
 export const yearOf = (t) => CONFIG.startYear + Math.floor(t / 4);
 export const seasonOf = (t) => t % 4;
@@ -97,6 +101,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
     houses: {},
     assets: { farm: false, business: null, lawyer: false },
     incident: null,
+    lieutenant: null,
     bribed: {},
     mods: {},
     targets: {},
@@ -119,6 +124,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
   for (const c of COUNTIES) if (c.southern) s.sym[c.id] += bg.southern;
   s.sym[s.home] = Math.max(0, Math.min(100, s.sym[s.home] + bg.home + 8)); // home is home
   for (const def of ALL_TARGETS) s.targets[def.id] = rollTarget(s.seed, 0, def);
+  s.law = initLaw(s.seed, s.sym);
   pay(s, K(s, 'startPurse') + bg.purse, 'What you came home with');
   const homeName = COUNTIES.find((c) => c.id === s.home).name;
   s.log.push({ t: 0, kind: 'story', text: `The war is over. Not for ${s.me.first} ${s.me.last}. You are back on the farm in ${homeName} County with ${picks.map((p) => p.name).join(', ')}, and none of you means to plough.` });
@@ -167,6 +173,9 @@ const MIGRATIONS = {
     for (const def of ALL_TARGETS) if (!targets[def.id]) targets[def.id] = rollTarget(s.seed, s.t, def);
     return { ...s, v: 3, targets, assets: s.assets || { farm: false, business: null, lawyer: false }, incident: null };
   },
+  // Version 3 saves predate the lawmen, the men's stories and lieutenants.
+  3: (s) => ({ ...s, v: 4, law: initLaw(s.seed, s.sym), lieutenant: null,
+    gang: s.gang.map((g) => ({ ...g, story: g.story ?? null, storyDone: g.storyDone ?? false })) }),
 };
 export function migrate(s) {
   if (!s || typeof s.v !== 'number') throw new Error('Not a save from this game.');
