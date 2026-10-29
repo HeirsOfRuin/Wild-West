@@ -121,3 +121,18 @@ another).
    newspaper presence only, or a later map?
 5. **A separate repository** (as each of the Workshop's games has had), with the
    shared engine parts copied and the family code as the only link?
+
+## Decisions (2026-10-29)
+
+The author: "ok, I am good with that" to the recommended answers.
+
+| Question | Decision |
+|---|---|
+| Real names or fictional? | Real names (Dillinger, Nelson, Purvis and others) as known men and lawmen; the player's character is fictional, as in the first game |
+| Turn length | One month |
+| How dark? | As plain as the first game: the cost shown in plain words |
+| Bonnie and Clyde | Newspaper presence only (outside this map) |
+| Where it lives | Its own repository; the family code (`DOAFAM1.`) is the only link |
+
+Next: in the new repository, the one-page spec (from this frame), then the kill
+gate (numbers only) before any UI, as with the first game.
