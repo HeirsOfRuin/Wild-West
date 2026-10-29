@@ -67,9 +67,9 @@ export const CONFIG = {
   detSkillOps: 0.2, // Pinkerton operations, per point of the lead operative's skill, when he is in your county
   detReplace: 2, // seasons before the agency sends a new man
   sheriffKillGrudge: 40, // the grudge the next sheriff starts with
-  lieutenantJobs: 3,
+  lieutenantJobs: 3, // jobs a man needs behind him before the others will follow him
   goneSourReward: 2000, // a man who left angry turns sour, broke, once the reward passes this...
-  goneSourRewardGood: 5000, // ...one who left on good terms only past this // jobs a man needs behind him before the others will follow him
+  goneSourRewardGood: 5000, // ...one who left on good terms only past this
   recruitOffers: 2, // most new men looking for you in a season
   offerLife: 2, // seasons an offer stands
 

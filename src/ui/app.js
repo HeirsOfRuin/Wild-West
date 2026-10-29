@@ -6,6 +6,7 @@ import { act, secondProblem } from '../engine/season.js';
 import { view, targetList, forecast, hideouts, band } from '../engine/derive.js';
 import { targetDef } from '../engine/job.js';
 import { retireNeeded } from '../engine/ending.js';
+import { familyRecord, familyCode } from '../engine/dynasty.js';
 import { COUNTIES, CASH_BAND } from '../data/world.data.js';
 import { TRAITS, BACKGROUNDS, GEAR } from '../data/gang.data.js';
 import { companionChoices, creationProblem, backgroundOf } from '../engine/people.js';
@@ -102,6 +103,7 @@ function titleScreen() {
     <p>The war is over. You and a few of your own come home with your guns. Rob banks, trains and stagecoaches; buy better horses and safe houses; keep the counties on your side; watch your own men. Nobody rides forever.</p>
     <div class="btns" style="justify-content:center">
       ${saved && !saved.outcome ? `<button class="btn" data-act="continue">Continue (${dateOf(saved.t)})</button>` : ''}
+      ${saved?.outcome ? `<button class="btn secondary" data-act="continue">How the last game ended${saved.outcome.kind === 'retired' ? ' (and the family code)' : ''}</button>` : ''}
       <button class="btn ${saved && !saved.outcome ? 'secondary' : ''}" data-act="new">New outlaw</button>
     </div>
     ${STORAGE_OK ? '' : '<p class="small">This browser will not keep a save here. Use the save code on the News tab to keep your game.</p>'}
@@ -454,6 +456,20 @@ function helpScreen() {
   <div class="card"><h3>Ending</h3><p>Killed, captured or betrayed ends it. To win, marry, then retire: the gang gone, cover ${C.retireNeedCover}+, ${$(C.retireNeedPurse)} saved, the family alive; then survive ${C.retireSeasons} quiet seasons, plus one for every ${C.retireSeasonsPerLegend} points of your peak legend. After ${C.endYear} the era is over.</p></div>`;
 }
 
+function familyCard() {
+  const r = familyRecord(S);
+  const code = familyCode(S);
+  const f = r.founder;
+  const word = { gun: 'a steady hand with a pistol', nerve: 'a cool head', horse: 'a way with horses' }[f.takesAfter];
+  return `<div class="card"><h3>What you leave behind</h3>
+    <p>${esc(f.name)} died in bed. The ${esc(r.family.map((m) => m.rel).includes('son') || r.family.map((m) => m.rel).includes('daughter') ? 'children grew up' : 'family lived on')} as Howards, with ${$(r.inheritance.cash)}${r.inheritance.farm ? ', a farm in Tennessee' : ''}${r.inheritance.business ? ' and a business' : ''}, ${esc(f.heirlooms.gun)} in a trunk, and ${esc(word)} that ran in the blood.</p>
+    ${r.friends.length ? `<p class="small">Kept faith: ${r.friends.map((x) => esc(x.name)).join(', ')}.</p>` : ''}
+    ${r.enemies.length ? `<p class="small">Sold you or tried to: ${r.enemies.map((x) => esc(x.name)).join(', ')}.</p>` : ''}
+    <p class="small">Keep this family code. The next game, set in 1933, will read it: a grandchild who takes after you, with what you left them.</p>
+    <textarea id="family-code" readonly>${code}</textarea>
+    <button class="btn small secondary" data-act="copy-family">Copy the family code</button></div>`;
+}
+
 function endScreen(v) {
   const o = v.outcome;
   const sc = o.score;
@@ -465,7 +481,8 @@ function endScreen(v) {
     <tr><td>Legend</td><td>${sc.legend}</td></tr><tr><td>Townsfolk killed</td><td>${sc.killed}</td></tr>
     <tr><td>Family</td><td>${sc.familyAlive ? 'alive' : 'not all alive'}</td></tr></table>
     ${sc.dead.length ? `<h3 style="margin-top:10px">Died in your service</h3><p>${sc.dead.map(esc).join(', ')}</p>` : ''}
-    <button class="btn block" data-act="new">Ride again</button></div>`;
+    <button class="btn block" data-act="new">Ride again</button></div>
+    ${o.kind === 'retired' ? familyCard() : ''}`;
 }
 
 // ---- render and events --------------------------------------------------------
@@ -614,6 +631,12 @@ app.addEventListener('click', (ev) => {
     case 'kill': return doAct({ type: 'kill', id: d.id });
     case 'recruit': return doAct({ type: 'recruit', id: d.id });
     case 'code': U.showCode = !U.showCode; break;
+    case 'copy-family': {
+      const box = document.getElementById('family-code');
+      const done = () => { U.toast = 'Copied.'; toast(); };
+      navigator.clipboard?.writeText(box.value).then(done).catch(() => { box.select(); U.toast = 'Selected: copy it from the box.'; toast(); });
+      return;
+    }
     case 'theme': {
       const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
