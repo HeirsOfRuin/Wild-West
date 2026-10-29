@@ -28,6 +28,7 @@ import { seasonPressure, COVER_COUNTY, COVER_NAME } from './pressure.js';
 import { buyGear, buyHouse, bribe, doctor, marry, loseHouse, buyAsset, hush } from './outfit.js';
 import { recruitOffers, childName } from './people.js';
 import { STATE_NEWS, STATE_FILLER } from '../data/news.data.js';
+import { KNOWN_MEN } from '../data/gang.data.js';
 import { retireProblem, finalScore, retireNeeded } from './ending.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -230,7 +231,7 @@ function seasonAction(s, a) {
       ctx.where = COVER_COUNTY[s.cover.place];
       if (s.purse < K(s, 'retireCost')) {
         s.retired = null;
-        events.push({ kind: 'bad', text: 'The money has run out. Mr. Howard cannot pay his bills, and Jesse James knows how to get more.' });
+        events.push({ kind: 'bad', text: `The money has run out. Mr. Howard cannot pay his bills, and ${s.me.first} ${s.me.last} knows how to get more.` });
       } else {
         pay(s, -K(s, 'retireCost'), 'A quiet life');
         s.cover.level = Math.min(100, s.cover.level + 5);
@@ -425,11 +426,18 @@ function history(s, rng) {
     news('The Adams Express Company has hired the Pinkerton National Detective Agency of Chicago to hunt you. They do not give up, they do not mind whom they hurt, and they pay informers.', 'The Pinkertons');
   }
   if (y === 1876 && q === 2 && !s.flags.northfieldDone) {
+    // Northfield comes to you: Chadwell brings the rumour himself, and if he is not
+    // riding with you he asks to (a set piece too important to leave to a recruit roll).
     const ch = member(s, 'chadwell');
-    if (ch && ch.status === 'active') {
+    if (active(s).length >= 3 && (!ch || ch.status === 'active' || ch.status === 'gone')) {
       s.flags.northfieldOffer = s.t;
       s.flags.northfieldCash = Math.round((NORTHFIELD.cash[0] + rng.next() * (NORTHFIELD.cash[1] - NORTHFIELD.cash[0])) / 100) * 100;
-      news(`Bill Chadwell talks every night about a bank in Northfield, Minnesota: General Ames's money, a sleepy Yankee town, nobody up there who can shoot. It is a long way. It is on offer this season only.`, 'Minnesota');
+      const known = KNOWN_MEN.find((k) => k.id === 'chadwell');
+      if (!ch && !s.offers.some((o) => o.id === 'chadwell')) {
+        s.flags['known:chadwell'] = true;
+        s.offers.push({ ...known, known: true, rel: 'a known man', expires: s.t });
+      }
+      news(`${ch?.status === 'active' ? 'Bill Chadwell talks every night' : 'A drifter named Bill Chadwell finds your hideout and talks all night'} about a bank in Northfield, Minnesota: General Ames's money, a sleepy Yankee town, nobody up there who can shoot. It is a long way. It is on offer this season only.`, 'Minnesota');
     }
   }
   if (y === 1879 && q === 0) news('New men are drifting into the old haunts, looking for you. Most of them never rode with Quantrill. Some of them are very young.', 'New faces');
@@ -464,7 +472,7 @@ function family(s, rng) {
   if (!s.married || seasonOf(s.t) !== 0) return;
   const kids = s.family.filter((f) => f.rel === 'son' || f.rel === 'daughter').length;
   if (kids >= 3 || !rng.chance(K(s, 'childChance'))) return;
-  const c = childName(s.seed, kids + 1, s.me.last);
+  const c = childName(s.seed, kids + 1, s.me.last, s.me.first, [...s.family.map((f) => f.name), ...s.gang.map((g) => g.name)]);
   const wife = s.family.find((f) => f.id === 'wife');
   if (!wife?.alive) return;
   s.family.push({ id: `child${kids + 1}`, name: c.name, rel: c.rel, alive: true, injured: false, core: true });

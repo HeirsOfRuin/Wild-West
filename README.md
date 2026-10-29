@@ -25,7 +25,8 @@ Turn-based, one season per turn, phone-first, works offline, no accounts.
 | `npm test`: invariants and forecast agreement | `node sim/killgate.js 100`: paired policies, noise floors |
 | `npm run smoke`: the page at 390x844 | `node sim/run.js 200`: every policy, every outcome |
 | `npm run check-bundle`: file:// and offline | `node sim/inert.js`: knobs and traits that do nothing |
-| | `node sim/trace.js 3 careful`: one game, season by season |
+| `node sim/audit.js 60`: every line players read, for continuity | `node sim/trace.js 3 careful`: one game, season by season |
+| | `node sim/reach.js 200`: how often each part of the game is seen |
 
 `npm run check` runs the tests, the build, the bundle check and the smoke test.
 Measured results are in `docs/DESIGN.md`.

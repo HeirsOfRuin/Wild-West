@@ -71,7 +71,7 @@ export function newGame(seed = 1, tune = {}, creation = DEFAULT_CREATION) {
   if (why) throw new Error(why);
   const bg = backgroundOf(creation.background);
   const leader = makeLeader(creation);
-  const picks = companionChoices(seed, creation.last.trim()).filter((c) => creation.companions.includes(c.kind));
+  const picks = companionChoices(seed, creation.last.trim(), creation.first).filter((c) => creation.companions.includes(c.kind));
   const s = {
     v: SAVE_VERSION,
     seed: seed >>> 0,

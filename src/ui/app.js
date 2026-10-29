@@ -115,7 +115,7 @@ function titleScreen() {
 
 function companionsHtml(c) {
   const want = backgroundOf(c.background).companions;
-  const picks = companionChoices(c.seed, c.last.trim() || 'Smith');
+  const picks = companionChoices(c.seed, c.last.trim() || 'Smith', c.first);
   return `<h3>Who rides with you (${c.companions.length} of ${want})</h3>
     <p class="small">Your brother and cousin are blood: they never sell you. The others might.</p>
     ${picks.map((p) => `<button class="choice" data-act="cr-comp" data-v="${p.kind}" aria-pressed="${c.companions.includes(p.kind)}">
@@ -657,7 +657,7 @@ app.addEventListener('input', (ev) => {
 // A surname changes your brother's name. Redraw only the companions, never the
 // fields: a full redraw would drop the keyboard on a phone mid-typing.
 app.addEventListener('change', (ev) => {
-  if (U.cr && ev.target.id === 'cr-last') document.getElementById('cr-comps').innerHTML = companionsHtml(U.cr);
+  if (U.cr && (ev.target.id === 'cr-last' || ev.target.id === 'cr-first')) document.getElementById('cr-comps').innerHTML = companionsHtml(U.cr);
 });
 
 const theme = lsGet('outlaw.theme');

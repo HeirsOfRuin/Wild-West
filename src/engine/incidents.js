@@ -173,7 +173,7 @@ function apply(s, e, b, rng, lines) {
         if (v.all) for (const m of followers(s)) nudge(s, m.id, v.all);
         break;
       case 'leaveIn': { const g = rawMember(s, b.who[0]); if (g) g.leaveT = s.t + v; break; }
-      case 'offer': s.offers.push({ ...strangerOffer(rng, `r${s.nextId++}`), expires: s.t + 1 }); break;
+      case 'offer': s.offers.push({ ...strangerOffer(rng, `r${s.nextId++}`, s), expires: s.t + 1 }); break;
       case 'tip': s.flags.tips = { ...(s.flags.tips || {}), [v]: s.t }; break;
       case 'intel': {
         const trains = TARGETS.filter((d) => d.kind === 'train' && (!d.from || yearOf(s.t) >= d.from));

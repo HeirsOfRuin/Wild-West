@@ -24,6 +24,18 @@ export function storyFor(rng, traits, kind) {
   return rng.weighted(pool.map((p) => ({ ...p, weight: p.weight }))).id;
 }
 
+/** Everyone a new man must not share a name with: the gang, past and present, the family, men already asking. */
+export const takenNames = (s) => (s ? [...s.gang.map((g) => g.name), ...s.family.map((f) => f.name), ...(s.offers || []).map((o) => o.name)] : []);
+
+/** A first name and surname nobody in the story already has. */
+export function freshName(rng, taken) {
+  for (let i = 0; i < 20; i++) {
+    const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
+    if (!taken.includes(`${first} ${last}`)) return [first, last];
+  }
+  return [rng.pick(FIRST_NAMES), rng.pick(SURNAMES)]; // 1,080 names: twenty misses in a row does not happen
+}
+
 export function makeMember(fields) {
   return {
     id: fields.id, name: fields.name, short: fields.short || fields.name.split(' ')[0],
@@ -37,9 +49,9 @@ export function makeMember(fields) {
 }
 
 /** The five companions on offer at creation, the same for the same seed and surname. */
-export function companionChoices(seed, last) {
+export function companionChoices(seed, last, leaderFirst = '') {
   const r = streamFor(seed, 0, 'companions');
-  const used = new Set();
+  const used = new Set([leaderFirst.trim()]); // your brother is not also called by your name
   const first = () => { let n; do n = r.pick(FIRST_NAMES); while (used.has(n)); used.add(n); return n; };
   return COMPANION_KINDS.map((k) => {
     const name = `${first()} ${k.sameName ? last : r.pick(SURNAMES)}`;
@@ -102,7 +114,7 @@ export function recruitOffers(s, rng, n, year, legend, nextId) {
     const roll = ([lo, hi]) => rng.range(lo, hi);
     const traits = [...(k.traits || [])];
     if (!traits.length && rng.chance(0.3)) traits.push(rng.pick(TRAIT_POOL));
-    const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
+    const [first, last] = freshName(rng, [...takenNames(s), ...out.map((o) => o.name)]);
     out.push({ id: `r${nextId()}`, name: `${first} ${last}`, short: first, gun: roll(gr), nerve: roll(nr), horse: roll(hr),
       traits, loyalty: rng.range(...k.loyalty), pitch: rng.pick(k.pitch), rel: k.id, story: storyFor(rng, traits, k.id) });
   }
@@ -113,15 +125,22 @@ export function wifeName(seed) {
   const r = streamFor(seed, 0, 'wife');
   return `${r.pick(WOMEN)} ${r.pick(SURNAMES)}`;
 }
-export function childName(seed, n, last) {
+/**
+ * A child's name. A son may be named for his father (Jesse James named his son
+ * Jesse Edward): then he is "Jr.". Nobody else repeats a living relative's name.
+ */
+export function childName(seed, n, last, father, taken = []) {
   const r = streamFor(seed, n, 'child');
   const boy = r.chance(0.5);
-  return { name: `${r.pick(boy ? FIRST_NAMES : WOMEN)} ${last}`, rel: boy ? 'son' : 'daughter' };
+  if (boy && n === 1 && r.chance(0.3)) return { name: `${father} ${last} Jr.`, rel: 'son' };
+  const used = new Set(taken.map((t) => t.split(' ')[0]));
+  const pool = (boy ? FIRST_NAMES : WOMEN).filter((x) => !used.has(x) && x !== father);
+  return { name: `${r.pick(pool)} ${last}`, rel: boy ? 'son' : 'daughter' };
 }
 
 /** The wounded bushwhacker who turns up at your hideout. */
-export function strangerOffer(rng, id) {
-  const first = rng.pick(FIRST_NAMES), last = rng.pick(SURNAMES);
+export function strangerOffer(rng, id, s) {
+  const [first, last] = freshName(rng, takenNames(s));
   return { id, name: `${first} ${last}`, short: first, gun: rng.range(2, 3), nerve: rng.range(2, 3), horse: 2,
     traits: rng.chance(0.4) ? ['hothead'] : [], loyalty: 68, rel: 'veteran', story: 'score',
     pitch: 'Rode with Bloody Bill. You took him in when he had nowhere to go, and he has not forgotten it.' };
