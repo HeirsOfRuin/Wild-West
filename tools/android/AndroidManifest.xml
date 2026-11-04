@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android app: the release single-file build in a WebView. The package name
+     is permanent once an APK is published: changing it makes a different app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.github.heirsofruin.deadoralive"
+    android:versionCode="1" android:versionName="1.0">
+  <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+  <!-- Only for the Google Fonts the page asks for; the game plays the same without them. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:label="Dead or Alive" android:icon="@mipmap/ic_launcher"
+      android:allowBackup="true" android:theme="@android:style/Theme.Material.NoActionBar">
+    <activity android:name=".MainActivity" android:exported="true"
+        android:screenOrientation="portrait"
+        android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|uiMode">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

@@ -193,10 +193,15 @@ await writeFile(join(ROOT, EMBED), embedded, 'utf8');
 // cache is named by the page's hash, so a new deploy replaces the old one.
 const SITE = 'dist/site';
 await mkdir(join(ROOT, SITE), { recursive: true });
+// Reading navigator.serviceWorker THROWS ("Access is denied") in a frame with
+// site data blocked, before .catch() can see it: guard the lookup (Touchline;
+// caught again here by pre-public on the itch zip).
 const register = `<script>
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  try {
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  } catch (e) { /* storage blocked: play without the offline copy */ }
 </script>`;
 let site = html;
 const siteSwaps = [
