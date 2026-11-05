@@ -2,7 +2,11 @@
 <!-- docs/itch/cover.html: the 630x500 cover, rendered by tools/press.mjs at 2x.
      The game's own palette (src/ui/styles.css: newsprint #ece3cf, lamp-black
      #241c14, dried-blood #8e2a1c) and faces (Rye, Old Standard TT). A wanted bill
-     on a plank wall: the bill is the game's thesis, and it reads at 315x250. -->
+     on a plank wall: the bill is the game's thesis, and it reads at 315x250.
+     Revised after launch: the first cover got 1.86% click-through on its first
+     day. Its italic line and footer were unreadable at listing size, and nothing
+     said what kind of game it was. The hook and the genre line are now sized to
+     read in the 315x250 preview. -->
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Rye&display=swap">
 <style>
@@ -27,11 +31,11 @@
   .rule { margin: 0 34px; border-top: 3px double #241c14; }
   .wanted { font-family: Rye, "Rockwell Extra Bold", Georgia, serif; font-size: 52px; letter-spacing: .08em; margin: 34px 0 8px; }
   .title { font-family: Rye, "Rockwell Extra Bold", Georgia, serif; font-size: 66px; line-height: .95; margin: 14px 0 10px; color: #8e2a1c; }
-  .reward { font-weight: 700; font-size: 30px; letter-spacing: .06em; margin: 12px 0 2px; }
-  .for { font-style: italic; font-size: 17px; margin: 0 52px; line-height: 1.3; }
-  .place { font-weight: 700; font-size: 17px; letter-spacing: .24em; text-transform: uppercase; margin: 18px 0 0; }
+  .reward { font-weight: 700; font-size: 30px; letter-spacing: .06em; margin: 12px 0 4px; }
+  .hook { font-weight: 700; font-style: italic; font-size: 25px; margin: 0 30px; line-height: 1.15; color: #8e2a1c; }
+  .place { font-weight: 700; font-size: 19px; letter-spacing: .22em; text-transform: uppercase; margin: 14px 0 0; }
   .star { position: absolute; right: 16px; top: 16px; width: 50px; height: 50px; transform: rotate(14deg); opacity: .85; }
-  .foot { position: absolute; bottom: 10px; width: 100%; text-align: center; font: 700 11px system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #cdbf9f; text-shadow: 0 1px 2px #000; }
+  .foot { position: absolute; bottom: 8px; width: 100%; text-align: center; font: 800 15px system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; color: #e6d9b8; text-shadow: 0 1px 3px #000; }
 </style></head><body>
   <div class="grain"></div>
   <div class="bill">
@@ -40,10 +44,10 @@
     <div class="title">DEAD<br>OR ALIVE</div>
     <div class="rule"></div>
     <div class="reward">$5,000 REWARD</div>
-    <div class="for">for the leader of the gang that robbed the banks and trains of Missouri</div>
+    <div class="hook">Lead the gang. Rob the banks.<br>Trust no one.</div>
     <div class="place">Missouri · 1866–1882</div>
     <svg class="star" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#8e2a1c" stroke-width="5"/><path d="M50 14 L59 39 L86 39 L64 55 L72 81 L50 65 L28 81 L36 55 L14 39 L41 39 Z" fill="#8e2a1c"/></svg>
   </div>
   <div class="nail"></div>
-  <div class="foot">An outlaw game · phone or browser</div>
+  <div class="foot">Turn-based outlaw strategy · Free</div>
 </body></html>

@@ -30,7 +30,7 @@ Every count in the copy is read out of the build, not from memory.
 | Release status | Released |
 | Pricing | No payments (or Donate, $0 minimum: the author's call) |
 | Genre | Strategy |
-| Tags | western, outlaws, turn-based, strategy, historical, management, singleplayer, text-based, mobile, offline |
+| Tags | western, outlaws, crime, turn-based, strategy, historical, management, text-based, life-simulation, narrative (singleplayer, mobile and offline dropped after launch: the platform filters already cover mobile, and nobody browses those three; life-simulation is the tag that sends this account the most visits) |
 | Cover | `cover-630x500.png` (check `cover-preview-315x250.png`: that is how browse listings show it) |
 | Screenshots | shot1-plan-a-job, shot2-the-map, shot3-the-gang, shot4-the-papers (a real game the careful bot played to winter 1869, as Will Harlan) |
 | Links | None yet: the GitHub Pages copy deploys from the default branch, and this work is not merged |
